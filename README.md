@@ -1,11 +1,16 @@
-# Landmark Channel Toolkit V3
+# Landmark Channel Toolkit V4
 
-V3 combines:
+## What's new
+- `Floorplate Update Report` supports PowerPoint **and PDF** floorplates.
+- Better matching for unit formats like `G.02`, `G02`, `Unit4104`, `Unit 4104`.
+- Report sheets: Summary, Price Changed, Missing in Floorplate, Extra in Floorplate, Area Changed, Matched, All Checks.
+- Cleaner Excel formatting with colours and frozen headers.
+- `PPT Price Update` remains price-only replacement for existing PowerPoint labels.
 
-1. PPT核对Report: audit Excel vs PPT without modifying PPT.
-2. PPT价格更新: update only existing Unit prices in PPT and generate a report.
+## Deploy
+Upload and overwrite these files in GitHub:
+- app.py
+- requirements.txt
+- README.md
 
-Notes:
-- Missing units are not automatically generated; they are listed in the report.
-- Price update tries to preserve formatting by replacing only the price text inside existing text runs.
-- Supports `.xlsx` and many `.xls` exports. If an `.xls` fails, save it as `.xlsx` and upload again.
+Then commit. Streamlit Cloud will redeploy automatically; URL stays the same.
