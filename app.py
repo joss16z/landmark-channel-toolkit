@@ -8,6 +8,9 @@ from typing import Any, Optional
 import pandas as pd
 import streamlit as st
 from pptx import Presentation
+import fitz  # PyMuPDF
+import pytesseract
+from PIL import Image
 
 # Optional PDF support
 try:
@@ -187,6 +190,208 @@ def build_price_table(df: pd.DataFrame, cfg: ExcelConfig) -> pd.DataFrame:
 
     work = work[work["__unit"].astype(bool)].drop_duplicates("__unit", keep="first")
     return work[["__unit", "Unit", "Excel Area", "Excel Price", "Status", "Internal", "External"]].copy()
+
+
+# =========================================================
+# PDF Price List ingest (V5)
+# =========================================================
+
+def _pdf_embedded_text_rows(pdf_bytes: bytes) -> list[tuple[int, str]]:
+    rows: list[tuple[int, str]] = []
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    for page_idx, page in enumerate(doc, start=1):
+        text = page.get_text("text") or ""
+        for line in text.splitlines():
+            if line.strip():
+                rows.append((page_idx, line.strip()))
+    return rows
+
+
+def _pdf_ocr_rows(pdf_bytes: bytes, dpi: int = 300) -> list[tuple[int, str]]:
+    """OCR image-only PDF and rebuild complete visual rows."""
+    rows: list[tuple[int, str]] = []
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+
+    for page_idx, page in enumerate(doc, start=1):
+        pix = page.get_pixmap(dpi=dpi, alpha=False)
+        image = Image.open(io.BytesIO(pix.tobytes("png")))
+        data = pytesseract.image_to_data(
+            image,
+            output_type=pytesseract.Output.DATAFRAME,
+            config="--psm 6",
+        )
+        data = data.dropna(subset=["text"])
+        data = data[data["conf"] >= 20]
+
+        words = []
+        for _, row in data.iterrows():
+            word = str(row["text"]).strip()
+            if not word:
+                continue
+            words.append({
+                "text": word,
+                "left": int(row["left"]),
+                "top": int(row["top"]),
+                "height": int(row["height"]),
+            })
+
+        words.sort(key=lambda item: (item["top"], item["left"]))
+        groups: list[list[dict[str, Any]]] = []
+        tolerance = 18
+
+        for word in words:
+            centre_y = word["top"] + word["height"] / 2
+            target = None
+            for group in groups:
+                group_y = sum(
+                    item["top"] + item["height"] / 2 for item in group
+                ) / len(group)
+                if abs(centre_y - group_y) <= tolerance:
+                    target = group
+                    break
+            if target is None:
+                groups.append([word])
+            else:
+                target.append(word)
+
+        for group in groups:
+            group.sort(key=lambda item: item["left"])
+            line = " ".join(item["text"] for item in group).strip()
+            if line:
+                rows.append((page_idx, line))
+
+    return rows
+
+
+def _parse_price_pdf_row(line: str, page_idx: int) -> Optional[dict[str, Any]]:
+    """
+    Parse one complete Price List row, supporting examples like:
+      4.08 66 ... 77 m² 10 m² Yes N/W A$1,051,000 Available
+      4 08 66 ... 77 m2 10 m2 ... $1,051,000 Available
+    """
+    cleaned = (
+        str(line)
+        .replace("m?", "m²")
+        .replace("m2", "m²")
+        .replace("A§", "A$")
+    )
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+    if not re.search(r"\bAvailable\b", cleaned, flags=re.I):
+        return None
+
+    # Correct a known common OCR collapse: 39.05 -> 2905.
+    if cleaned.startswith("2905 "):
+        cleaned = "39.05 " + cleaned[len("2905 "):]
+
+    unit_match = re.match(
+        r"^\s*(\d{1,2}(?:[.\s]\d{1,2})|\d{3,4})\b",
+        cleaned,
+    )
+    if not unit_match:
+        return None
+
+    raw_unit = unit_match.group(1)
+    remainder = cleaned[unit_match.end():].strip()
+
+    price_match = re.search(r"A?\$\s*([\d,]+)", remainder, flags=re.I)
+    if not price_match:
+        return None
+
+    area_values = [
+        parse_int
+        for raw in re.findall(
+            r"(\d{1,3})\s*m(?:²|\^?2|\?)",
+            remainder,
+            flags=re.I,
+        )
+        if (parse_int := money_number(raw)) is not None
+    ]
+    if len(area_values) < 2:
+        return None
+
+    lot_match = re.match(r"^\s*([0-9\]\|Il]{2,3})\b", remainder)
+    lot = ""
+    if lot_match:
+        raw_lot = (
+            lot_match.group(1)
+            .replace("]", "1")
+            .replace("|", "1")
+            .replace("I", "1")
+            .replace("l", "1")
+        )
+        lot_num = money_number(raw_lot)
+        lot = str(int(lot_num)) if lot_num is not None else ""
+
+    return {
+        "__unit": clean_unit(raw_unit),
+        "Unit": display_unit(raw_unit),
+        "Excel Area": area_text(int(area_values[-2]), int(area_values[-1])),
+        "Excel Price": format_money(price_match.group(1)),
+        "Status": "Available",
+        "Internal": str(int(area_values[-2])),
+        "External": str(int(area_values[-1])),
+        "Lot": lot,
+        "PDF Page": page_idx,
+        "Source Line": line,
+    }
+
+
+def parse_price_list_pdf(pdf_bytes: bytes) -> pd.DataFrame:
+    # Try embedded text first.
+    parsed_rows = []
+    for page_idx, line in _pdf_embedded_text_rows(pdf_bytes):
+        row = _parse_price_pdf_row(line, page_idx)
+        if row:
+            parsed_rows.append(row)
+
+    # Image-only fallback.
+    if len(parsed_rows) < 5:
+        parsed_rows = []
+        for page_idx, line in _pdf_ocr_rows(pdf_bytes):
+            row = _parse_price_pdf_row(line, page_idx)
+            if row:
+                parsed_rows.append(row)
+
+    df = pd.DataFrame(parsed_rows)
+    if df.empty:
+        raise ValueError(
+            "No Available units could be parsed from this PDF. "
+            "Please confirm the PDF contains Unit, INT, EXT, Price and Status columns."
+        )
+
+    return df.drop_duplicates("__unit", keep="first")
+
+
+def price_list_controls(key_prefix: str):
+    """Upload either Excel or PDF Price List and return a normalised price table."""
+    price_file = st.file_uploader(
+        "Upload Price List Excel/PDF",
+        type=["xls", "xlsx", "pdf"],
+        key=f"{key_prefix}_price_list",
+    )
+    if not price_file:
+        return None, None, None
+
+    if price_file.name.lower().endswith(".pdf"):
+        try:
+            with st.spinner("Reading PDF Price List..."):
+                price_df = parse_price_list_pdf(price_file.getvalue())
+            st.success(f"Parsed {len(price_df)} Available units from PDF.")
+            with st.expander("PDF Price List preview"):
+                preview_cols = [
+                    col for col in
+                    ["Unit", "Lot", "Excel Area", "Excel Price", "Status", "PDF Page"]
+                    if col in price_df.columns
+                ]
+                st.dataframe(price_df[preview_cols].head(30), use_container_width=True)
+            return price_df.copy(), price_df.copy(), None
+        except Exception as exc:
+            st.error("PDF Price List could not be parsed.")
+            st.exception(exc)
+            return None, None, None
+
+    return excel_controls(key_prefix)
 
 # =========================================================
 # Floorplate parsing: PPT + PDF
@@ -590,11 +795,11 @@ page = st.sidebar.radio(
 )
 
 st.title("🏢 Landmark Channel Toolkit")
-st.caption("V4 — Better Floorplate Update Report + PPT/PDF support")
+st.caption("V5 — Excel/PDF Price List + improved image-PDF OCR matching")
 
 if page == "📋 Floorplate Update Report":
     st.header("📋 Floorplate Update Report")
-    st.write("上传 Price List Excel 和 Floorplate PPT/PDF，生成更清晰的核对报告：Price Changed / Missing / Extra / Area Changed。不会修改原文件。")
+    st.write("上传 Price List Excel/PDF 和 Floorplate PPT/PDF，生成 Price Changed / Missing / Extra / Area Changed 报告。不会修改原文件。")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -602,7 +807,7 @@ if page == "📋 Floorplate Update Report":
     with c2:
         project_name = st.text_input("Project Name", value="Floorplate", key="report_project")
 
-    df, price_df, cfg = excel_controls("report")
+    df, price_df, cfg = price_list_controls("report")
 
     if floorplate_file and price_df is not None and st.button("Generate Floorplate Update Report", type="primary"):
         try:
@@ -619,7 +824,7 @@ if page == "📋 Floorplate Update Report":
             )
             st.dataframe(report, use_container_width=True)
         except Exception as e:
-            st.error("生成报告失败。请检查上传文件是否为可读取的 PPT/PDF 和 Excel。")
+            st.error("生成报告失败。请检查 Floorplate 及 Excel/PDF Price List 是否可读取。")
             st.exception(e)
 
 elif page == "✅ PPT价格更新":
