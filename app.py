@@ -674,8 +674,32 @@ def result_fill(result: str):
     return None
 
 
+
+# Excel/openpyxl does not allow control characters such as vertical tabs (\x0b).
+_ILLEGAL_EXCEL_CHARS_RE = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
+
+def clean_excel_value(value: Any) -> Any:
+    """Remove control characters that openpyxl rejects, while preserving normal text."""
+    if isinstance(value, str):
+        return _ILLEGAL_EXCEL_CHARS_RE.sub("", value)
+    return value
+
+def clean_dataframe_for_excel(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy whose string cells are safe to write with openpyxl."""
+    cleaned = df.copy()
+    for column in cleaned.columns:
+        cleaned[column] = cleaned[column].map(clean_excel_value)
+    return cleaned
+
 def report_to_xlsx(report: pd.DataFrame, price_df: pd.DataFrame, fp_df: pd.DataFrame, project_name: str) -> bytes:
     output = io.BytesIO()
+
+    # Sanitize all text before writing. PPT/PDF extraction can contain hidden
+    # control characters such as vertical tab (\x0b), which Excel rejects.
+    report = clean_dataframe_for_excel(report)
+    price_df = clean_dataframe_for_excel(price_df)
+    fp_df = clean_dataframe_for_excel(fp_df)
+
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         counts = report["Result"].value_counts().to_dict() if not report.empty else {}
         summary = pd.DataFrame([
@@ -700,6 +724,7 @@ def report_to_xlsx(report: pd.DataFrame, price_df: pd.DataFrame, fp_df: pd.DataF
         ]
         for name, results in sheets:
             subset = report[report["Result"].isin(results)] if not report.empty else pd.DataFrame()
+            subset = clean_dataframe_for_excel(subset)
             subset.to_excel(writer, index=False, sheet_name=name[:31])
 
         wb = writer.book
