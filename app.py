@@ -8,6 +8,7 @@ from typing import Any, Optional
 import pandas as pd
 import streamlit as st
 from pptx import Presentation
+from floorplate_update_report_v6 import generate_report_from_uploaded_files
 import fitz  # PyMuPDF
 import pytesseract
 from PIL import Image
@@ -824,32 +825,71 @@ st.caption("V5 — Excel/PDF Price List + improved image-PDF OCR matching")
 
 if page == "📋 Floorplate Update Report":
     st.header("📋 Floorplate Update Report")
-    st.write("上传 Price List Excel/PDF 和 Floorplate PPT/PDF，生成 Price Changed / Missing / Extra / Area Changed 报告。不会修改原文件。")
+    st.write(
+        "上传 Floorplate PPTX 和 Price List Excel/PDF。"
+        "PDF Price List 使用 V6 OCR 完整行解析，生成 Missing / Extra / Price / Area 报告。"
+        "不会修改原 PPT。"
+    )
 
     c1, c2 = st.columns(2)
     with c1:
-        floorplate_file = st.file_uploader("Upload Floorplate PPT/PDF", type=["pptx", "ppt", "pdf"], key="report_floorplate")
+        floorplate_file = st.file_uploader(
+            "Upload Floorplate PPTX",
+            type=["pptx"],
+            key="report_floorplate",
+        )
     with c2:
-        project_name = st.text_input("Project Name", value="Floorplate", key="report_project")
+        price_list_file = st.file_uploader(
+            "Upload Price List Excel / PDF",
+            type=["xls", "xlsx", "pdf"],
+            key="report_price_list",
+        )
 
-    df, price_df, cfg = price_list_controls("report")
+    project_name = st.text_input(
+        "Project Name",
+        value="Floorplate",
+        key="report_project",
+    )
 
-    if floorplate_file and price_df is not None and st.button("Generate Floorplate Update Report", type="primary"):
+    if floorplate_file and price_list_file and st.button(
+        "Generate Floorplate Update Report",
+        type="primary",
+    ):
         try:
-            fp_df = parse_floorplate(floorplate_file)
-            report = generate_update_report(price_df, fp_df)
-            report_xlsx = report_to_xlsx(report, price_df, fp_df, project_name=project_name)
+            with st.spinner("正在解析 Price List 并核对 Floorplate……"):
+                report_bytes, summary = generate_report_from_uploaded_files(
+                    floorplate_file.getvalue(),
+                    floorplate_file.name,
+                    price_list_file.getvalue(),
+                    price_list_file.name,
+                    project_name,
+                )
+
             st.success("Floorplate Update Report generated.")
-            show_metrics(report, price_df, fp_df)
+
+            m1, m2, m3, m4, m5, m6 = st.columns(6)
+            m1.metric("Available", summary.get("available", 0))
+            m2.metric("PPT Units", summary.get("ppt_labelled", 0))
+            m3.metric("Matched", summary.get("matched", 0))
+            m4.metric("Price Changed", summary.get("price_mismatch", 0))
+            m5.metric("Missing", summary.get("missing", 0))
+            m6.metric("Extra", summary.get("extra", 0))
+
+            if price_list_file.name.lower().endswith(".pdf"):
+                st.info(
+                    "PDF 已使用 V6 OCR 完整行解析。"
+                    "请先核对 Available 数量是否与 PDF 实际总数一致；"
+                    "若数量明显偏低，不要直接采用 Extra 结果。"
+                )
+
             st.download_button(
                 "Download Floorplate Update Report",
-                report_xlsx,
+                report_bytes,
                 file_name=f"{project_name.replace(' ', '_')}_Floorplate_Update_Report.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
-            st.dataframe(report, use_container_width=True)
         except Exception as e:
-            st.error("生成报告失败。请检查 Floorplate 及 Excel/PDF Price List 是否可读取。")
+            st.error("生成报告失败。请检查 Floorplate 和 Price List 是否可读取。")
             st.exception(e)
 
 elif page == "✅ PPT价格更新":
