@@ -8,7 +8,7 @@ from typing import Any, Optional
 import pandas as pd
 import streamlit as st
 from pptx import Presentation
-from floorplate_update_report_v6 import generate_report_from_uploaded_files
+from floorplate_update_report_v8 import generate_report_from_uploaded_files
 import fitz  # PyMuPDF
 import pytesseract
 from PIL import Image
@@ -877,10 +877,12 @@ if page == "📋 Floorplate Update Report":
 
             if price_list_file.name.lower().endswith(".pdf"):
                 st.info(
-                    "PDF 已使用 V6 OCR 完整行解析。"
-                    "请先核对 Available 数量是否与 PDF 实际总数一致；"
-                    "若数量明显偏低，不要直接采用 Extra 结果。"
+                    "PDF 已使用多通道解析；PPT 仅识别有颜色填充且含 Unit 与价格的文本框：完整行 OCR + 表格列恢复。"
+                    "请先核对 Available 数量；数量异常时不要直接采用 Extra 结果。"
                 )
+                parsed_units = summary.get("parsed_units", [])
+                with st.expander("查看 PDF 实际识别到的 Unit"):
+                    st.write(", ".join(parsed_units))
 
             st.download_button(
                 "Download Floorplate Update Report",
