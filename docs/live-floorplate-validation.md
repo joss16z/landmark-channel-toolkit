@@ -170,3 +170,14 @@ Full suite: `.venv/bin/python -m unittest discover -s tests -q` — **52 passed*
 No live request, credential inspection, production change or price-sync enablement
 was performed. Approved-client comparison and vendor/IT log correlation are still
 required to separate credential/project authorization failure from network policy.
+
+### Owner-provided two-endpoint diagnostic
+
+Added an independent, explicit `Test Project List Access` button using only the
+official GET getProjectList with agencyid/sign. No optional filters, project
+link following, pagination or response-envelope assumptions were added. Synthetic
+regressions cover its exact transport parameters, private-value redaction,
+unsupported endpoint rejection, HTTP 403 and independent UI invocation without
+snapshot creation or price-sync enablement. HTTP 200 is not an authentication or
+visibility guarantee. Full suite: **55 passed** using
+`.venv/bin/python -m unittest discover -s tests -q`. No live calls were performed.

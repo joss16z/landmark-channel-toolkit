@@ -219,3 +219,40 @@ Because this official protocol carries the key in the query, IT/vendor must
 also ensure infrastructure/access logs redact query credentials; application
 redaction cannot guarantee third-party logging behavior. Do not enable live
 price synchronization based on a successful connection diagnostic alone.
+
+### Compare the two owner-provided endpoints without sharing data
+
+The internal page now has a second explicit button, **Test Project List Access**.
+It calls only the official `getProjectList` via GET with the same server-side
+`agencyid` and `sign`; it does not send `projectid` or any optional filters,
+follow project links, enumerate pages, save responses or synchronize inventory.
+The blank optional filters in the owner-provided example are optional according
+to the parameter table and are intentionally omitted. The guide does not require
+parameter order, a browser login, or a different signature for either read API.
+
+In the approved internal deployment, click the list button and note its HTTP
+status, then click **Test Arcanite Connection** and note the detail status. Only
+the most recently clicked test is displayed. Do not share the request URL or
+raw response. There is no automatic probe or fallback after a failed request.
+
+- List JSON is structurally inspectable without a documented response envelope;
+  it must not be reported as verified authentication or project visibility.
+  Business-level errors may also arrive with HTTP 200. Only field names/types
+  and the existing safe Lot/status counts (if present) are displayed.
+- List HTTP 200 versus detail HTTP 403 makes a project-specific rejection worth
+  investigating **if** the list is genuinely a successful API response. The
+  status pair alone does not establish that, prove the key is valid, or rule out
+  endpoint-specific WAF rules.
+- Both HTTP 403 do not distinguish invalid credentials from a shared gateway
+  restriction. Both HTTP 200 still do not prove complete inventory or safe prices.
+- The documentation explicitly limits list visibility to projects marked
+  **Show on Website**. The provided project ID is owner-confirmed, but this
+  diagnostic cannot yet establish that it appears in the API-visible list:
+  the list's actual ID path and success/error envelope remain unverified.
+  It does not infer missing projects are unauthorized, change portal settings,
+  or assume that an Agent Portal login grants third-party website API access.
+
+Use only the owner's current raw API key from private server Secrets. This
+additional diagnostic uses no browser cookies, invented parameters or alternate
+hosts, and does not change live price-sync gates. No live calls were made while
+implementing or testing it.

@@ -153,3 +153,49 @@ class ConnectionTests(unittest.TestCase):
             self.assertEqual(len(app.exception),0)
             self.assertEqual(len(app.error),1)
             fetch.assert_not_called()
+
+    def test_project_list_uses_only_agency_and_sign_not_project_or_filters(self):
+        # Official list query deliberately excludes even a configured project ID.
+        response=Mock(status=200,url='https://service.arcnet.com.au/arc-service-api/v1/project/getProjectList')
+        response.headers=Message();response.headers['Content-Type']='application/json'
+        response.read.return_value=b'{"unverifiedEnvelope":[{"projectid":123,"projectname":"PRIVATE_PROJECT","price":"PRIVATE_PRICE"}]}'
+        for config in ({k:v for k,v in CONFIG.items() if k!='projectid'},
+                       {'query':{**CONFIG,'searchkey':'PRIVATE_FILTER','pagenum':1,'pagesize':1}}):
+            with patch('live_floorplate.api.build_opener') as opener:
+                opener.return_value.open.return_value.__enter__.return_value=response
+                result=connection_report(config,endpoint='getProjectList')
+                self.assertTrue(result['ok'])  # Inspectable JSON only, not verified authentication.
+                self.assertFalse(result['summary']['endpoint_completeness_verified'])
+                request=opener.return_value.open.call_args.args[0]
+                parsed=urlsplit(request.full_url)
+                self.assertEqual(parsed.scheme+'://'+parsed.netloc+parsed.path,
+                    'https://service.arcnet.com.au/arc-service-api/v1/project/getProjectList')
+                self.assertEqual(request.get_method(),'GET')
+                self.assertIsNone(request.data)
+                self.assertEqual(parse_qs(parsed.query),{'agencyid':[CONFIG['agencyid']],'sign':[CONFIG['sign']]})
+                for value in ('PRIVATE_PROJECT','PRIVATE_PRICE','PRIVATE_FILTER',CONFIG['sign']):
+                    self.assertNotIn(value,str(result))
+
+    def test_project_list_failure_is_safe_and_no_other_endpoint_can_be_requested(self):
+        with patch('live_floorplate.connection_test.fetch_json_response',return_value=(403,None)) as fetch:
+            self.assertEqual(connection_report(CONFIG,'getProjectList'),{'http_status':403,'ok':False})
+            self.assertEqual(fetch.call_count,1)
+        for endpoint in ('addClient','https://other.invalid/','getProjectList?extra=1'):
+            with patch('live_floorplate.connection_test.fetch_json_response') as fetch:
+                self.assertEqual(connection_report(CONFIG,endpoint),{'http_status':None,'ok':False})
+                fetch.assert_not_called()
+
+    def test_project_list_button_is_independent_and_does_not_enable_prices(self):
+        from streamlit.testing.v1 import AppTest
+        from pathlib import Path
+        with patch('live_floorplate.ui.connection_report',return_value={'http_status':403,'ok':False}) as report:
+            app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/'app.py'),default_timeout=20)
+            app.secrets['arcanite']=CONFIG
+            app.run();app.sidebar.radio[0].set_value('🏢 Live Floorplate').run()
+            report.assert_not_called()
+            next(b for b in app.button if b.label=='Test Project List Access').click().run()
+            report.assert_called_once_with(CONFIG,endpoint='getProjectList')
+            self.assertEqual(len(app.exception),0)
+            self.assertEqual(len(app.error),1)
+            self.assertNotIn('live_floorplate_snapshot',app.session_state)
+            self.assertNotIn('Configured Agent Portal API',app.radio[0].options)

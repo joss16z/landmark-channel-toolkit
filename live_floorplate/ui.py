@@ -79,27 +79,32 @@ def show_snapshot(layout, pdf, style):
 def render_connection_test():
     with st.expander('Arcanite connection diagnostics'):
         st.caption('Optional read-only server request. Does not synchronize prices or certify authentication, visibility or completeness. Use only in an approved, access-restricted deployment.')
-        if st.button('Test Arcanite Connection',key='test_arcanite_connection'):
-            try:
-                report = connection_report(st.secrets['arcanite'])
-            except Exception:
-                report = {'http_status':None,'ok':False}
-            status = report['http_status']
-            st.write('HTTP status: ' + (str(status) if status is not None else 'unavailable'))
-            if not report['ok']:
-                st.error('Connection or response validation failed. Check server-side configuration and authorized access. Live price synchronization remains disabled.')
-            summary = report.get('summary')
-            if summary:
-                st.dataframe([{'Field':key,'Types':', '.join(types)}
-                              for key,types in summary['response_fields'].items()],hide_index=True)
-                for array in summary['property_arrays']:
-                    st.caption('Property array field: ' + array['rows_path'])
-                    st.write({key:array[key] for key in ('row_count','unique_lots','invalid_lot_rows','duplicate_lot_rows')})
+        st.caption('Compare the project list and project detail independently. The guide limits the list to projects marked Show on Website; HTTP 200 alone does not prove API authentication or project visibility.')
+        for label,button_key,endpoint in (
+                ('Test Arcanite Connection','test_arcanite_connection','getProject'),
+                ('Test Project List Access','test_arcanite_project_list','getProjectList')):
+            if st.button(label,key=button_key):
+                try:
+                    report = connection_report(st.secrets['arcanite'],endpoint=endpoint)
+                except Exception:
+                    report = {'http_status':None,'ok':False}
+                st.caption('Endpoint: ' + endpoint)
+                status = report['http_status']
+                st.write('HTTP status: ' + (str(status) if status is not None else 'unavailable'))
+                if not report['ok']:
+                    st.error('Connection or response validation failed. Check server-side configuration and authorized access. Live price synchronization remains disabled.')
+                summary = report.get('summary')
+                if summary:
                     st.dataframe([{'Field':key,'Types':', '.join(types)}
-                                  for key,types in array['fields'].items()],hide_index=True)
-                    st.dataframe([{'Status':key,'Count':value}
-                                  for key,value in array['status_counts'].items()],hide_index=True)
-                st.warning('Structure diagnostics only. Live prices, full inventory visibility and completeness remain unverified; no inventory snapshot was created.')
+                                  for key,types in summary['response_fields'].items()],hide_index=True)
+                    for array in summary['property_arrays']:
+                        st.caption('Property array field: ' + array['rows_path'])
+                        st.write({key:array[key] for key in ('row_count','unique_lots','invalid_lot_rows','duplicate_lot_rows')})
+                        st.dataframe([{'Field':key,'Types':', '.join(types)}
+                                      for key,types in array['fields'].items()],hide_index=True)
+                        st.dataframe([{'Status':key,'Count':value}
+                                      for key,value in array['status_counts'].items()],hide_index=True)
+                    st.warning('Structure diagnostics only. Live prices, full inventory visibility and completeness remain unverified; no inventory snapshot was created.')
 
 
 def render_page():
