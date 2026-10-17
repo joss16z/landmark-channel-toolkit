@@ -77,15 +77,18 @@ def pdf_image(pdf_bytes, page_index):
 
 
 def fitted_label(label,pos,style):
-    # Conservative shared wrapping for HTML and PPT; fail rather than clip prices.
+    # Preserve the reference PPT's one-unit-per-line hierarchy; never wrap a price row.
     for size in [style.size-i*.25 for i in range(max(1,int((style.size-7)*4)+1))]:
         if size<7: break
-        chars=max(1,int((pos.width*style.slide_width*72-6)/(size*.48)))
+        chars=max(1,int((pos.width*style.slide_width*72-10)/(size*.53)))
         lines=[]
         for line in label.splitlines():
+            if line.startswith('Unit ') and len(line)>chars:
+                lines=[]
+                break
             lines.extend(textwrap.wrap(line,width=chars,break_long_words=False,break_on_hyphens=False) or [''])
         if any(len(line)>chars for line in lines): continue
-        if len(lines)*size*1.15 <= pos.height*style.slide_height*72-6:
+        if len(lines)*size*1.19 <= pos.height*style.slide_height*72-8:
             return '\n'.join(lines),size
     raise FloorplateError('Information box cannot fit all Available data legibly')
 
@@ -97,14 +100,15 @@ def html_view(snapshot,layout,pdf_bytes,group,style=Style()):
     boxes=[];leaders=[]
     for pos,label,apartments in information_boxes(snapshot,layout,group):
         label,size=fitted_label(label,pos,style)
-        label=escape(label).replace('\n','<br>')
+        parts=label.splitlines()
+        label=''.join(f'<span class="label-row {"unit-row" if line.startswith("Unit ") else "detail-row"}">{escape(line)}</span>' for line in parts)
         x,y=pos.x+pos.width/2,pos.y+pos.height/2
         leaders.append(f'<line x1="{x*1000}" y1="{y*1000}" x2="{pos.anchor_x*1000}" y2="{pos.anchor_y*1000}" stroke="#777" stroke-width=".6"/>')
         boxes.append(f'<div class="label" style="left:{pos.x*100}%;top:{pos.y*100}%;width:{pos.width*100}%;height:{pos.height*100}%;font-size:{size*100/(style.slide_width*72)}cqw" aria-label="Available apartments"><span>{label}</span></div>')
     return f'''<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>
     body{{margin:0}} .canvas{{position:relative;width:100%;aspect-ratio:{width}/{height};container-type:inline-size}}
     img,svg{{width:100%;height:100%;display:block}} svg{{position:absolute;inset:0;pointer-events:none}}
-    .label{{position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;background:#{style.fill};color:#{style.ink};font-family:"{escape(style.font)}",Arial,sans-serif;line-height:1.15;border:1px solid #555;border-radius:9px;overflow:hidden;padding:2px}}
+    .label{{position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;background:#{style.fill};color:#{style.ink};font-family:"{escape(style.font)}",Arial,sans-serif;line-height:1.19;border:1px solid #777;border-radius:9px;overflow:hidden;padding:3px 4px}}\n    .label>span{{display:flex;flex-direction:column;align-items:center;width:100%}} .label-row{{display:block;white-space:nowrap;width:100%}} .detail-row{{font-weight:600}} .unit-row{{font-weight:400}}
     </style></head><body><div class="canvas"><img alt="Original floorplate artwork" src="data:image/png;base64,{base64.b64encode(png).decode()}"><svg viewBox="0 0 1000 1000" preserveAspectRatio="none">{''.join(leaders)}</svg>{''.join(boxes)}</div></body></html>'''
 
 
@@ -132,7 +136,10 @@ def powerpoint(snapshot,layout,pdf_bytes,style=Style()):
             shape.text,size=fitted_label(label,pos,style)
             for paragraph in shape.text_frame.paragraphs:
                 paragraph.alignment=PP_ALIGN.CENTER
+                paragraph.space_before=Pt(0)
+                paragraph.space_after=Pt(0)
                 paragraph.font.name,paragraph.font.size=style.font,Pt(size)
+                paragraph.font.bold=not paragraph.text.startswith('Unit ')
                 paragraph.font.color.rgb=RGBColor.from_string(style.ink)
         footer=slide.shapes.add_textbox(Inches(3.5),Inches(sh-.23),Inches(sw-4),Inches(.18))
         footer.text=f'{"SAMPLE — " if snapshot.sample else ""}{title} | As of {snapshot.synced_at.isoformat()} | Owner review required'
