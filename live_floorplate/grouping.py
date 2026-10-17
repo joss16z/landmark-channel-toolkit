@@ -20,7 +20,7 @@ def information_boxes(snapshot,layout,group):
         signature=lambda a:(a.configuration,a.internal,a.external)
         if len({signature(a) for a in apartments})==1:
             a=apartments[0]
-            lines=[a.configuration,f'{a.internal:g} + {a.external:g} m²']
+            lines=[a.configuration,f'{a.internal:g}m² + {a.external:g}m²']
             lines += [f'Unit {a.unit} - {format_price(a.price)}' for a in apartments]
         else:
             lines=[]
