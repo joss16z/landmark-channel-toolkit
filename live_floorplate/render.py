@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from html import escape
 import io
 import re
+import textwrap
+import math
 import fitz
 from pptx import Presentation
 from pptx.dml.color import RGBColor
@@ -12,30 +14,27 @@ from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.util import Inches, Pt
 from floorplate_update_report_v8 import _shape_has_coloured_solid_fill, normalize_unit
 from .model import FloorplateError
-from .layout import LEVELS, level_title, matched
+from .layout import matched
+from .source_mapping import GROUPS
+from .grouping import information_boxes
 
-FLOOR_GROUPS = ((0,), (1,), (2, 3, 4), (5, 6, 7), (8,))
+FLOOR_GROUPS=tuple(group[4] for group in GROUPS)
 
-def grouped_labels(snapshot, layout, levels):
-    """Combine Available units at identical confirmed label positions across shared levels."""
-    groups = {}
-    for apartment, position in matched(snapshot, layout):
-        if position.level not in levels:
-            continue
-        key = (position.x, position.y, position.width, position.height)
-        groups.setdefault(key, []).append((position.level, apartment, position))
-    return [(items[0][2], '\n'.join(a.label for _, a, _ in sorted(items, key=lambda item: (item[0], item[1].unit)))) for items in groups.values()]
 
+def grouped_labels(snapshot,layout,levels):
+    """Compatibility with the existing feature branch's five-group helper."""
+    group=FLOOR_GROUPS.index(tuple(levels))
+    return [(pos,label) for pos,label,apartments in information_boxes(snapshot,layout,group)]
 
 
 @dataclass(frozen=True)
 class Style:
-    fill: str = 'FFF200'
+    fill: str = 'C2C7AD'
     ink: str = '000000'
     font: str = 'Arial'
-    size: float = 12
-    slide_width: float = 13.333333
-    slide_height: float = 7.5
+    size: float = 10
+    slide_width: float = 16.535433
+    slide_height: float = 11.692913
 
 
 def walk_shapes(shapes):
@@ -77,54 +76,66 @@ def pdf_image(pdf_bytes, page_index):
         return pix.tobytes('png'), pix.width, pix.height
 
 
-def html_view(snapshot, layout, pdf_bytes, level, style=Style()):
-    levels = level if isinstance(level, tuple) else (level,)
-    png,width,height = pdf_image(pdf_bytes,layout.pages[levels[0]])
-    boxes = []
-    for pos, label_text in grouped_labels(snapshot, layout, levels):
-        label = escape(label_text).replace('\\n','<br>')
-        boxes.append(f'<div class="label" style="left:{pos.x*100}%;top:{pos.y*100}%;width:{pos.width*100}%;height:{pos.height*100}%" aria-label="Available apartment"><span>{label}</span></div>')
+def fitted_label(label,pos,style):
+    # Conservative shared wrapping for HTML and PPT; fail rather than clip prices.
+    for size in [style.size-i*.25 for i in range(max(1,int((style.size-7)*4)+1))]:
+        if size<7: break
+        chars=max(1,int((pos.width*style.slide_width*72-6)/(size*.48)))
+        lines=[]
+        for line in label.splitlines():
+            lines.extend(textwrap.wrap(line,width=chars,break_long_words=False,break_on_hyphens=False) or [''])
+        if any(len(line)>chars for line in lines): continue
+        if len(lines)*size*1.15 <= pos.height*style.slide_height*72-6:
+            return '\n'.join(lines),size
+    raise FloorplateError('Information box cannot fit all Available data legibly')
+
+
+def html_view(snapshot,layout,pdf_bytes,group,style=Style()):
+    if isinstance(group,tuple):
+        group=FLOOR_GROUPS.index(group)
+    png,width,height=pdf_image(pdf_bytes,layout.pages[GROUPS[group][4][0]])
+    boxes=[];leaders=[]
+    for pos,label,apartments in information_boxes(snapshot,layout,group):
+        label,size=fitted_label(label,pos,style)
+        label=escape(label).replace('\n','<br>')
+        x,y=pos.x+pos.width/2,pos.y+pos.height/2
+        leaders.append(f'<line x1="{x*1000}" y1="{y*1000}" x2="{pos.anchor_x*1000}" y2="{pos.anchor_y*1000}" stroke="#777" stroke-width=".6"/>')
+        boxes.append(f'<div class="label" style="left:{pos.x*100}%;top:{pos.y*100}%;width:{pos.width*100}%;height:{pos.height*100}%;font-size:{size*100/(style.slide_width*72)}cqw" aria-label="Available apartments"><span>{label}</span></div>')
     return f'''<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>
-    body{{margin:0;font-family:Arial}} .canvas{{position:relative;width:100%;aspect-ratio:{width}/{height}}}
-    img{{width:100%;height:100%;display:block}} .label{{position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;background:#{style.fill};color:#{style.ink};font-family:{escape(style.font)};font-size:clamp(8px,1.2vw,16px);border:1px solid #333;overflow:auto}}
-    </style></head><body><div class="canvas"><img alt="Original floorplate drawing" src="data:image/png;base64,{base64.b64encode(png).decode()}">{''.join(boxes)}</div></body></html>'''
+    body{{margin:0}} .canvas{{position:relative;width:100%;aspect-ratio:{width}/{height};container-type:inline-size}}
+    img,svg{{width:100%;height:100%;display:block}} svg{{position:absolute;inset:0;pointer-events:none}}
+    .label{{position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;background:#{style.fill};color:#{style.ink};font-family:"{escape(style.font)}",Arial,sans-serif;line-height:1.15;border:1px solid #555;border-radius:9px;overflow:hidden;padding:2px}}
+    </style></head><body><div class="canvas"><img alt="Original floorplate artwork" src="data:image/png;base64,{base64.b64encode(png).decode()}"><svg viewBox="0 0 1000 1000" preserveAspectRatio="none">{''.join(leaders)}</svg>{''.join(boxes)}</div></body></html>'''
 
 
-def powerpoint(snapshot, layout, pdf_bytes, style=Style()):
+def powerpoint(snapshot,layout,pdf_bytes,style=Style()):
     matched(snapshot,layout)
-    prs = Presentation()
-    sw,sh = style.slide_width,style.slide_height
-    prs.slide_width,prs.slide_height = Inches(sw),Inches(sh)
-    for levels in FLOOR_GROUPS:
-        level = levels[0]
-        slide = prs.slides.add_slide(prs.slide_layouts[6])
-        title = slide.shapes.add_textbox(Inches(.2),0,Inches(sw-.4),Inches(.5))
-        group_title = level_title(level) if len(levels) == 1 else f'Levels {levels[0]}–{levels[-1]}'
-        title.text = f'{"SAMPLE — " if snapshot.sample else ""}{snapshot.project} — {group_title}'
-        title.text_frame.paragraphs[0].font.size = Pt(20)
-        png,pw,ph = pdf_image(pdf_bytes,layout.pages[level])
-        ratio = min(sw/pw,(sh-1.2)/ph)
-        width,height = pw*ratio,ph*ratio
-        left,top = (sw-width)/2,.6+(sh-1.2-height)/2
-        slide.shapes.add_picture(io.BytesIO(png),Inches(left),Inches(top),Inches(width),Inches(height))
-        for pos,label_text in grouped_labels(snapshot,layout,levels):
-            shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,Inches(left+pos.x*width),
-                Inches(top+pos.y*height),Inches(pos.width*width),Inches(pos.height*height))
-            shape.fill.solid()
-            shape.fill.fore_color.rgb = RGBColor.from_string(style.fill)
-            shape.line.color.rgb = RGBColor(0,0,0)
-            shape.text_frame.word_wrap = True
-            shape.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
-            shape.text_frame.margin_left = shape.text_frame.margin_right = Inches(.03)
-            shape.text = label_text
-            for p in shape.text_frame.paragraphs:
-                p.alignment = PP_ALIGN.CENTER
-                p.font.name,p.font.size = style.font,Pt(style.size)
-                p.font.color.rgb = RGBColor.from_string(style.ink)
-        footer = slide.shapes.add_textbox(Inches(.2),Inches(sh-.5),Inches(sw-.4),Inches(.35))
-        footer.text = f'As of {snapshot.synced_at.isoformat()} — {"Synthetic demonstration" if snapshot.sample else "Agent Portal scope; owner review required"}'
-        footer.text_frame.paragraphs[0].font.size = Pt(9)
-    result = io.BytesIO()
-    prs.save(result)
-    matched(snapshot,layout)
+    prs=Presentation();sw,sh=style.slide_width,style.slide_height
+    prs.slide_width,prs.slide_height=Inches(sw),Inches(sh)
+    for group,title,start,end,levels in GROUPS:
+        slide=prs.slides.add_slide(prs.slide_layouts[6])
+        png,_,_=pdf_image(pdf_bytes,layout.pages[levels[0]])
+        slide.shapes.add_picture(io.BytesIO(png),0,0,Inches(sw),Inches(sh))
+        for pos,label,apartments in information_boxes(snapshot,layout,group):
+            from pptx.enum.shapes import MSO_CONNECTOR
+            line=slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT,
+                Inches((pos.x+pos.width/2)*sw),Inches((pos.y+pos.height/2)*sh),
+                Inches(pos.anchor_x*sw),Inches(pos.anchor_y*sh))
+            line.line.color.rgb=RGBColor.from_string('777777');line.line.width=Pt(.5)
+            shape=slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,Inches(pos.x*sw),Inches(pos.y*sh),
+                                        Inches(pos.width*sw),Inches(pos.height*sh))
+            shape.fill.solid();shape.fill.fore_color.rgb=RGBColor.from_string(style.fill)
+            shape.line.color.rgb=RGBColor.from_string(style.fill)
+            shape.text_frame.word_wrap=False;shape.text_frame.vertical_anchor=MSO_ANCHOR.MIDDLE
+            shape.text_frame.margin_left=shape.text_frame.margin_right=Inches(.025)
+            shape.text_frame.margin_top=shape.text_frame.margin_bottom=Inches(.025)
+            shape.text,size=fitted_label(label,pos,style)
+            for paragraph in shape.text_frame.paragraphs:
+                paragraph.alignment=PP_ALIGN.CENTER
+                paragraph.font.name,paragraph.font.size=style.font,Pt(size)
+                paragraph.font.color.rgb=RGBColor.from_string(style.ink)
+        footer=slide.shapes.add_textbox(Inches(3.5),Inches(sh-.23),Inches(sw-4),Inches(.18))
+        footer.text=f'{"SAMPLE — " if snapshot.sample else ""}{title} | As of {snapshot.synced_at.isoformat()} | Owner review required'
+        footer.text_frame.paragraphs[0].font.size=Pt(7)
+    result=io.BytesIO();prs.save(result);matched(snapshot,layout)
     return result.getvalue()

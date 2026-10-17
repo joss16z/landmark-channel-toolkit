@@ -17,9 +17,11 @@ Then commit. Streamlit Cloud will redeploy automatically; URL stays the same.
 
 ## Live Floorplate (feature branch; not deployed)
 
-The additive Live Floorplate page includes a synthetic demonstration and as-of
-PowerPoint export. Existing Report Tools remain available. See
+The additive Live Floorplate page includes a source-checked mapping for all 115
+Hurstville Lots, five online floor groups and exactly five PowerPoint slides.
+Use Source PDF preview with synthetic inventory to review the supplied artwork
+without API access. Existing Report Tools remain available. See
 [setup, mapping, API configuration and limitations](docs/live-floorplate.md).
-Real Hurstville PDFs, confirmed positions, reference styling and the actual
-getProject contract must be supplied before live use. Credentials belong only
+Upload the original PDF and reference PPT in the approved runtime. Validation of
+the actual getProject response remains pending the redacted sample. Credentials belong only
 in server-side Streamlit Secrets in the company-approved environment.

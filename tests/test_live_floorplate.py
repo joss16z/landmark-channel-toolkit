@@ -19,7 +19,7 @@ from live_floorplate.sample import demonstration
 
 def row(**changes):
     result = dict(project='Hurstville Rise',lotnumber='001',propertystatus='Available',
-                  unit='G.01',bedrooms='2 Bed',internal=75,external=12,price='$1,000,000')
+                  unit='G.01',bedrooms='2 Bed',bathrooms=2,internal=75,external=12,price='$1,000,000')
     result.update(changes)
     return result
 
@@ -47,7 +47,7 @@ class InventoryTests(unittest.TestCase):
 
     def test_incomplete_duplicates_scope_and_bad_fields(self):
         for rows,total in (([row()],2),([row(),row(lotnumber=1)],2),([row(project='Other')],1),
-                           ([row(price='POA')],1),([row(unit=None)],1),([row(internal='unknown')],1)):
+                           ([row(price='POA')],1),([row(unit=None)],1),([row(bathrooms=None)],1),([row(internal='unknown')],1)):
             with self.subTest(rows=rows,total=total),self.assertRaises(FloorplateError):
                 snapshot(rows,total,'Hurstville Rise')
         self.assertEqual(snapshot([],0,'Hurstville Rise').apartments,())
@@ -76,6 +76,29 @@ class InventoryTests(unittest.TestCase):
 
 
 class APITests(unittest.TestCase):
+    def test_verified_request_context_needs_no_property_project_or_total(self):
+        cfg=config()
+        cfg.update(project_context_verified=True,completeness='expected_lot_set',expected_lots=[1],pagination='single',
+                   query={'projectid':'SYNTHETIC_PROJECT'})
+        cfg['fields'].pop('project')
+        cfg.pop('total_path')
+        item=row();item.pop('project')
+        data=sync(cfg,Mock(return_value={'records':[item]}))
+        self.assertEqual(data.source_rows,1)
+        self.assertEqual(data.apartments[0].bathrooms,'2')
+        cfg['project_context_verified']=False
+        fetch=Mock()
+        with self.assertRaises(FloorplateError):sync(cfg,fetch)
+        fetch.assert_not_called()
+
+    def test_countless_response_requires_exact_reviewed_lot_set(self):
+        cfg=config();cfg.update(completeness='expected_lot_set',expected_lots=[1,2],pagination='single')
+        with self.assertRaises(FloorplateError):sync(cfg,Mock(return_value={'records':[row()]}))
+        cfg['expected_lots']=[]
+        fetch=Mock()
+        with self.assertRaises(FloorplateError):sync(cfg,fetch)
+        fetch.assert_not_called()
+
     def test_signed_query_is_server_transport_only(self):
         cfg = config()
         cfg['pagination']='single'
@@ -132,18 +155,19 @@ class APITests(unittest.TestCase):
 
 
 class RenderingTests(unittest.TestCase):
-    def test_ppt_has_five_grouped_slides_and_only_available_labels(self):
+    def test_ppt_has_five_slides_and_only_available_labels(self):
         data,layout,pdf = demonstration()
         prs = Presentation(io.BytesIO(powerpoint(data,layout,pdf)))
         self.assertEqual(len(prs.slides),5)
-        for slide,levels in zip(prs.slides, ((0,), (1,), (2,3,4), (5,6,7), (8,))):
+        from live_floorplate.source_mapping import GROUPS
+        for group,slide in enumerate(prs.slides):
             text = '\n'.join(s.text for s in slide.shapes if s.has_text_frame)
-            for level in levels: self.assertIn(f'Unit DEMO-{level}00',text)
+            for level in GROUPS[group][4]:
+                self.assertIn(f'Unit DEMO-{level}00',text)
+                for unavailable in (1,2,3): self.assertNotIn(f'Unit DEMO-{level}0{unavailable}',text)
             self.assertIn('2 Bed',text)
             self.assertIn('75 + 12 m²',text)
             self.assertIn('$1,000,000',text)
-            for level in levels:
-                for unavailable in (1,2,3): self.assertNotIn(f'Unit DEMO-{level}0{unavailable}',text)
             self.assertEqual(sum(s.shape_type == 13 for s in slide.shapes),1)
 
     def test_html_and_ppt_share_labels_and_escape_unit(self):

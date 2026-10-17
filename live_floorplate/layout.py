@@ -18,6 +18,10 @@ class Position:
     y: float
     width: float
     height: float
+    group: int = -1
+    box_id: str = ''
+    anchor_x: float = 0
+    anchor_y: float = 0
 
 
 @dataclass(frozen=True)
@@ -26,10 +30,15 @@ class Layout:
     positions: dict
 
 
-def parse_layout(data, page_count):
-    if (not isinstance(data, dict) or data.get('version') != 1
+def parse_layout(data, page_count, pdf_bytes=None):
+    if (not isinstance(data, dict) or data.get('version') not in (1,2)
             or data.get('project') != 'Hurstville Rise' or data.get('verified') is not True):
         raise FloorplateError('Reviewed Hurstville Rise mapping required')
+    if data['version']==2:
+        from .source_mapping import verify_source
+        if pdf_bytes is None:
+            raise FloorplateError('Source PDF required to verify mapping')
+        verify_source(data,pdf_bytes)
     pages = data['pages']
     if set(pages) != {str(i) for i in LEVELS}:
         raise FloorplateError('Ground through Level 8 must be mapped explicitly')
@@ -48,7 +57,12 @@ def parse_layout(data, page_count):
         x,y,w,h = coords
         if not (0 <= x < 1 and 0 <= y < 1 and w > 0 and h > 0 and x+w <= 1 and y+h <= 1):
             raise FloorplateError('Position outside PDF bounds')
-        positions[lot] = Position(lot,level,x,y,w,h)
+        from .source_mapping import GROUPS
+        group=next(g[0] for g in GROUPS if level in g[4])
+        if data['version']==2 and row['group']!=group:
+            raise FloorplateError('Lot floor group mismatch')
+        positions[lot] = Position(lot,level,x,y,w,h,group,row.get('box_id',lot),
+                                  row.get('anchor_x',x+w/2),row.get('anchor_y',y+h/2))
     return Layout({int(k):v for k,v in pages.items()},positions)
 
 

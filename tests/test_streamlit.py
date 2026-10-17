@@ -19,6 +19,11 @@ class StreamlitTests(unittest.TestCase):
         self.assertEqual(len(app.exception),0)
         self.assertIn('Live Floorplate',app.header[0].value)
         self.assertTrue(app.session_state['live_floorplate_snapshot'].sample)
+        groups=app.selectbox[0]
+        self.assertEqual(groups.options,['Ground','Level 1','Levels 2–4','Levels 5–7','Level 8'])
+        for group in range(5):
+            app.selectbox[0].set_value(group).run()
+            self.assertEqual(len(app.exception),0)
 
     def test_configured_mode_does_not_call_api_without_assets(self):
         with patch('live_floorplate.ui.sync') as sync:

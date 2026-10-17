@@ -1,143 +1,113 @@
-# Live Floorplate — first working version
+# Live Floorplate operator and development guide
 
-The existing Streamlit app and both active Report Tools remain in place. Run:
+Run the existing app with `streamlit run app.py` after installing `requirements.txt`.
+Run the complete suite with `python -m unittest discover -s tests -q`.
+The existing Floorplate Update Report and PPT Price Update tools are unchanged.
 
-```sh
-python -m venv .venv
-# Activate the environment using your platform's normal command.
-python -m pip install -r requirements.txt
-python -m unittest discover -s tests -v
-streamlit run app.py
-```
+## Three modes
 
-Choose **Live Floorplate** in the sidebar. The default demonstration is generated
-from synthetic domain records and synthetic rectangular drawings. It is not an
-Arcanite response, real inventory, actual Hurstville placement or approved Landmark
-artwork. It demonstrates Ground through Level 8, reusing PDF pages for Levels 2–4
-and 5–7, and generates nine PowerPoint slides from the same snapshot.
+1. **Synthetic demonstration**: generated fake drawings and fake apartments; no
+   company files or API access needed. Demonstrates the five floor groups.
+2. **Source PDF preview (synthetic inventory)**: upload the supplied original
+   six-page Hurstville PDF and reference five-slide PPT. Check the review box.
+   The bundled mapping matches this precise PDF by checksum. All 115 Lots are
+   assigned conspicuous TEST units and fake values to stress-test layout only.
+   Use manual refresh, select any of the five groups, and download a five-slide
+   sample PPT. No Secrets or network connection is needed for this mode.
+3. **Configured Agent Portal API**: same uploaded artwork and checked mapping,
+   but only a successful validated server-side sync can provide real labels.
+   This mode remains blocked until the actual response contract is verified.
 
-## Existing functions reviewed and reused
+Use company-approved hosting for real uploads. Uploaded documents and all snapshots
+stay in the current server session, not Git. Source artwork is never overwritten.
+The provided PPT is read for styling only, not for historical prices or current
+availability. Backgrounds must contain no historical price labels. The originals
+are not bundled in the repository; the checked coordinate mapping is bundled.
 
-`app.py` provides unit/price formatting, PDF ingest and report/update UI functions.
-They remain unchanged; importing app helpers into a renderer would execute the UI.
-`floorplate_update_report_v8.py` provides `normalize_unit` and colored Unit-label
-recognition, reused for accessible labels and reference PowerPoint styling. Its
-`is_available` accepts aliases such as “yes” and “a”, so it is deliberately not used
-for the strict API rule. The new page accepts only `propertystatus == "Available"`;
-Held, Pending and Sold produce no new information boxes or prices. Unknown status
-or invalid required Available data fails the complete snapshot.
+## Source mapping
 
-## Pending source inputs — no invented live contract
+The complete `live_floorplate/hurstville_mapping.json` is version 2, covering
+Lots 1–115 and 57 source footprints. PDF page indices are zero-based: Ground=1,
+Level 1=2, Levels 2–4=3, Levels 5–7=4, Level 8=5; page 0 is the cover.
+Each record contains the source number bbox/page, floor, group, common box ID,
+normalized label rectangle and normalized leader anchor. Stack members share the
+same anchor and box coordinates. Lot is the matching key; never infer it from Unit.
 
-The owner supplied the original Hurstville Rise PDF and reference PowerPoint;
-they were inspected outside Git and are not committed. The PDF has a cover plus
-five layout pages; the PowerPoint has five layouts with grouped shapes. No
-explicit Lot references were found in their editable text. Confirmed Lot positions
-and a redacted getProject schema remain pending. Exact visual parity and live
-API interoperability are **unverified**.
+`verify_source` checks the exact original PDF, every source number, stack order,
+115-Lot coverage, 57 footprints, shared coordinates, and box/artwork collisions.
+Edited or replaced assets must be reviewed and their mapping reverified; a checksum
+mismatch is an error, not an invitation to change only the stored checksum.
+The optional replacement mapping uploader accepts source-evidenced version 2 only.
+Version 1 remains internal to the generated synthetic demonstration. The template
+is intentionally unverified and cannot authorize live rendering.
 
-The configured page uploads these assets into the current Streamlit session only.
-Use an approved runtime: file uploads and secrets are available to that server,
-so do not upload company documents to an unapproved public/Cloud deployment.
-The app does not write uploads to the repository. Keep local files under ignored
-`private/` or outside the checkout. Original PDF/PPTX bytes are never overwritten.
-Only their rendered architectural background and extracted label style are used.
-PDF backgrounds must have no embedded old prices/availability labels; the operator
-must confirm this before use. The app cannot automatically verify that assertion.
+Source verification does not approve publication; `owner_publication_approval`
+is false. The operator's review checkbox confirms this run's source inspection.
+See [validation evidence](live-floorplate-validation.md) for coverage and checks.
 
-## Explicit layout mapping
+## Information boxes and export
 
-Start from `live-floorplate-layout.template.json`. `pages` maps level strings 0–8
-to **zero-based** page indices in the uploaded PDF sequence. The template uses
-the supplied six-page PDF: Ground=1, Level 1=2, Levels 2–4=3, Levels 5–7=4,
-Level 8=5; page 0 is the cover. These are background bindings, not Lot mappings. Multiple PDFs are
-combined in memory in upload order. Reverify indices if the upload sequence changes;
-levels 2/3/4 must share one page and 5/6/7 another. No Lot-to-floor relationship is
-inferred. `positions` contains entries shaped as:
+Both online view and export use Ground, Level 1, Levels 2–4, Levels 5–7, Level 8.
+Each footprint has one rounded light sage box, containing only Available apartments.
+A group may contain multiple floors' units; unavailable members are omitted entirely.
+Bedroom/bathroom and Internal + External fields accompany each current Unit/price.
+Shared headings are compressed only when all member values agree. Different data
+is retained rather than assumed identical. Text fitting is shared by HTML and PPT;
+if it cannot remain legible, rendering fails rather than clipping a price.
 
-```text
-{"lotnumber": <confirmed lot>, "level": <integer 0..8>,
- "x": <fraction>, "y": <fraction>, "width": <fraction>, "height": <fraction>}
-```
+Export has exactly five slides, PDF backgrounds filling reference-size slides,
+editable boxes, source leaders and as-of footers. New labels are outside the
+apartment artwork. The source PPT's historical positions covered only its then-
+Available subset; the new mapping has positions for every footprint. This is not
+a promise of pixel-identical historical presentation. Owner visual approval is
+required before publishing. Source PDF rasterization preserves the original view
+but does not create editable architectural vectors in the exported PPT.
 
-Coordinates describe the information box relative to the original PDF page,
-with origin at its top-left and bounds 0..1. Every Available lot needs exactly one
-confirmed position; unknown or duplicate mappings block both views and exports.
-Use owner-approved label positions and sizes that fit the text without covering
-important drawing details. Set `verified` true only after review. `lotnumber` is
-the match key; unit numbers, record order, and numerical Lot sequences do not
-choose the floor or layout. Leading-zero numeric lots share a canonical key;
-duplicates within the project fail validation. Unknown extra positions are inert.
+## API configuration: still unverified
 
-## API configuration and Agent Portal permissions
+Use `.streamlit/secrets.toml.example` to configure only the approved server.
+It is disabled and contains placeholders. Put `agencyid`, `sign` and the verified
+Hurstville `projectid` in `[arcanite.query]`. Never put them in browser inputs,
+Git, logs, screenshots, PRs or chat. No live login, endpoint discovery or live API
+request was performed here. No project-list response or getProject payload has yet
+been supplied. The redacted response is being prepared by the owner.
 
-Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` only on the
-approved server, or enter equivalent settings in approved Streamlit Secrets.
-The example is disabled and contains the supplied public endpoint path, but no
-authentication values or invented live response shape. Configure `agencyid`,
-`sign` and the verified Hurstville `projectid` in `[arcanite.query]` locally;
-the signed URL supplied in chat is never committed or requested during development.
-`getProjectList` discovery is not implemented or called: the project ID still
-needs authorized verification. Do not paste credentials, cookies, tokens or price lists into
-GitHub, logs, browser code, chat or PR descriptions. No live authentication was
-performed during development. No authentication/MFA bypass or discovery exists.
+The account is a standard Agent Portal account, not an administrator/backend account.
+Use only the verified read-only request and inventory legitimately visible to it.
+Never expand permissions or probe for hidden inventory. Signed query values stay
+server-side, and redirects/cross-origin pagination are rejected before forwarding.
 
-An authorized operator must establish:
+The adapter is configurable rather than asserting unobserved response fields:
 
-- The exact getProject URL, read-only method and legitimately available account
-  scope. This is a standard Agent Portal account, without admin/backend privileges.
-- Actual field names and paths for project, `lotnumber`, `propertystatus`, unit,
-  bedroom configuration, Internal Area, External Area and current displayed price.
-- The all-status row count for the selected authorized project/view and its
-  pagination contract. A count of Available-only rows is not interchangeable.
-- The approved server-side authentication header, renewal procedure and runtime
-  authorization; no credentials are requested through the Streamlit frontend.
+- `fields` maps the actual row fields to lotnumber, propertystatus, unit, bedrooms,
+  bathrooms, Internal, External and price. `project` is optional only when
+  `project_context_verified=true` and a nonempty projectid binds the verified
+  request to Hurstville. If response-level project identity exists, configure
+  `scope_path` to validate it against the requested projectid.
+- `rows_path` is the verified path to the list. No property-level project ID is
+  assumed or required when using the verified single-project request context.
+- `completeness=total_field` reads a **real**, verified `total_path` and checks
+  unique scoped Lots and extracted rows against it, rejecting changes during paging.
+- `completeness=expected_lot_set` requires a reviewed explicit `expected_lots` list.
+  It needs no response total field. It accepts the result only if the endpoint
+  returns exactly that complete set, including unavailable properties. For a
+  full-project 115-Lot contract, configure all 115 Lots only after verification.
+  Do not pretend this proves completeness of an intentionally restricted subset.
+- `pagination=single` is allowed only for a verified complete single response;
+  `next_link` requires a real `next_path` terminating in explicit null. Offset,
+  cursor, nested-array or POST-based contracts require a separately verified adapter.
+  GET-only does not itself prove read-only semantics.
 
-The first adapter supports **verified GET requests** only, dot-separated object
-paths, a list of row objects, an integer complete total, and either a single page
-or a same-origin `next` link ending in explicit null. Empty `rows_path` means the
-payload itself is the list, but an independent verified total is still required.
-Other schemas, cursor/offset pagination, project metadata outside each row,
-POST-only read APIs, cookie/browser-bound authentication and nested row arrays
-need a separately reviewed adapter after the real contract is supplied. Do not
-change the method or guess a backend route merely to make a request succeed.
-GET alone cannot prove read-only semantics; the owner must verify the endpoint.
+Neither completeness option is currently verified for Arcanite. Unknown fields,
+missing fields, access errors, duplicates, inconsistent scope, malformed values,
+partial results and unknown statuses all fail closed. Missing Lots are never Sold.
+No schema, project count or pagination fields are invented for the live service.
 
-Set `enabled`/`contract_verified` true only after verification. Endpoint and headers
-stay server-side. Redirects, cross-origin/repeated pagination, non-JSON responses,
-401/403 failures, missing/moving totals, incomplete rows, duplicate Project+Lot keys,
-unknown statuses and mixed projects cannot produce a usable snapshot. There is
-no automatic network call on page load; synchronization requires the button.
-No discounted or adjusted price is calculated. Areas remain Internal + External.
+## Freshness and publication
 
-Completeness is restricted to the Agent Portal's authorized project/filter view;
-it never proves unrestricted company-wide inventory. Missing properties are never
-classified Sold. There is no publication or comparison against official inventory.
-
-## Freshness, UI and export
-
-A failed refresh removes the previous snapshot **before** networking. Successful
-snapshots show a UTC last-synced timestamp and expire after five minutes. The view
-checks every five seconds, with a browser timer hiding labels at expiry. No cache
-is shared between users. PowerPoint generation also checks freshness and includes
-an as-of timestamp on every slide; a downloaded file is a historical artifact,
-not a perpetually current price feed. Download controls disappear on expiry.
-
-HTML and PowerPoint consume the same immutable snapshot, Lot mapping and style.
-The PDF drawing remains a raster background; information boxes are editable PPT
-shapes. Reference solid RGB fill and first text-run font/size/color and reference slide dimensions are reused.
-Grouped labels are inspected recursively.
-Theme colors, complex multi-run style fidelity and grouping/connector-line copying
-are not implemented; unresolvable reference styling fails safely. The synthetic
-sample uses yellow/black Arial only as a demonstration. Owner visual review of
-actual files is required before use or publication. Export never changes official
-PPTs, writes to Dropbox, or publishes anything. No paid API/services are introduced.
-
-## Review and testing
-
-Tests use synthetic domain records and explicitly synthetic adapter contracts;
-no fixture asserts a real Arcanite response format. They cover exact availability,
-Lot matching, completeness, signed-query separation, prices, unsafe pagination, expiry, shared pages,
-PowerPoint contents/style, and the existing v8 report-generation path. Streamlit
-AppTest checks both existing Report Tools and the new sample page. Native browser
-visual parity, real Hurstville inputs and live API integration remain pending.
+Refresh invalidates previous data before network access. A failed refresh cannot
+retain old labels. Successful data carries a UTC sync time and expires after five
+minutes. UI checks every five seconds, with an iframe expiry timer; PPT generation
+also checks freshness. A downloaded PPT is an as-of artifact, not a perpetual feed.
+There is no shared inventory cache, automatic publication, official PPT update,
+Dropbox connection, paid API, merge or deployment in this feature branch.

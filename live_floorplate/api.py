@@ -8,7 +8,7 @@ from urllib.parse import urlsplit, urljoin, urlencode, urlunsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 from .model import FloorplateError, snapshot
 
-FIELDS = ('project','lotnumber','propertystatus','unit','bedrooms','internal','external','price')
+FIELDS = ('project','lotnumber','propertystatus','unit','bedrooms','bathrooms','internal','external','price')
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -71,7 +71,7 @@ def sync(config, fetch=fetch_page):
             raise FloorplateError('Query configuration is incomplete')
         url = urlunsplit((parsed.scheme,parsed.netloc,parsed.path,urlencode(query),''))
     fields = config['fields']
-    if set(fields) != set(FIELDS) or fields['lotnumber'] != 'lotnumber' or fields['propertystatus'] != 'propertystatus':
+    if set(fields) not in (set(FIELDS),set(FIELDS)-{'project'}) or fields['lotnumber'] != 'lotnumber' or fields['propertystatus'] != 'propertystatus':
         raise FloorplateError('Verified field mapping required')
     if any(not isinstance(v,str) or not v.strip() or 'VERIFY_' in v for v in fields.values()):
         raise FloorplateError('Unverified field mapping')
@@ -82,24 +82,50 @@ def sync(config, fetch=fetch_page):
         raise FloorplateError('Pagination contract is unknown')
     if config['pagination'] == 'next_link' and not config.get('next_path'):
         raise FloorplateError('Missing pagination path')
+    # Project identity may come from a verified single-project request context,
+    # not an invented property-level project field.
+    if 'project' not in fields and (config.get('project_context_verified') is not True
+            or not config.get('query',{}).get('projectid')):
+        raise FloorplateError('Single-project request context is unverified')
+    proof=config.get('completeness','total_field')
+    if proof not in ('total_field','expected_lot_set'):
+        raise FloorplateError('Unknown completeness proof')
+    expected=None
+    if proof=='expected_lot_set':
+        from .model import lot_key
+        configured=config.get('expected_lots')
+        if not isinstance(configured,list) or not configured:
+            raise FloorplateError('An explicit reviewed complete Lot set is required')
+        expected={lot_key(lot) for lot in configured}
+        if len(expected)!=len(configured):
+            raise FloorplateError('Ambiguous complete Lot set')
     rows, seen, total = [], set(), None
     for _ in range(200):
         if origin(url) != allowed or url in seen:
             raise FloorplateError('Unsafe or repeated pagination URL')
         seen.add(url)
         payload = fetch(url, headers)
-        count = path_value(payload, config['total_path'])
+        if config.get('scope_path'):
+            if str(path_value(payload,config['scope_path'])) != str(config['query']['projectid']):
+                raise FloorplateError('Response project identity differs from request')
+        count = path_value(payload, config['total_path']) if proof=='total_field' else len(expected)
         if type(count) is not int or count < 0 or (total is not None and count != total):
             raise FloorplateError('Missing or changing total')
         total = count
         page = path_value(payload, config['rows_path'])
         if not isinstance(page, list):
             raise FloorplateError('Response schema changed')
-        rows.extend({k:path_value(row, fields[k]) for k in FIELDS} for row in page)
+        for item in page:
+            record={k:path_value(item,path) for k,path in fields.items()}
+            if 'project' not in fields:
+                record['project']=config['project']
+            rows.append(record)
         if len(rows) > total:
             raise FloorplateError('More rows than displayed total')
         next_url = path_value(payload, config['next_path']) if config['pagination'] == 'next_link' else None
         if next_url is None:
+            if expected is not None and {lot_key(r['lotnumber']) for r in rows}!=expected:
+                raise FloorplateError('Complete scoped Lot set not returned')
             return snapshot(rows, total, config['project'])
         if not isinstance(next_url, str) or not next_url or not page:
             raise FloorplateError('Incomplete pagination')

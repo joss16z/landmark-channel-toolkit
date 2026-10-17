@@ -58,10 +58,17 @@ class Apartment:
     internal: Decimal
     external: Decimal
     price: Decimal
+    bathrooms: str = ''
 
     @property
     def label(self):
-        return f'{self.bedrooms}\n{self.internal:g} + {self.external:g} m²\nUnit {self.unit} - {format_price(self.price)}'
+        return f'{self.configuration}\n{self.internal:g} + {self.external:g} m²\nUnit {self.unit} - {format_price(self.price)}'
+
+    @property
+    def configuration(self):
+        beds=self.bedrooms+' Bed' if re.fullmatch(r'\d+',self.bedrooms) else self.bedrooms
+        baths=self.bathrooms if 'bath' in self.bathrooms.lower() else self.bathrooms+' Bath'
+        return f'{beds} / {baths}' if self.bathrooms else beds
 
 
 @dataclass(frozen=True)
@@ -97,5 +104,6 @@ def snapshot(rows, total, project, *, sample=False):
             continue
         apartments.append(Apartment(lot, text(row.get('unit')), text(row.get('bedrooms')),
                                     number(row.get('internal')), number(row.get('external')),
-                                    number(row.get('price'), price=True)))
+                                    number(row.get('price'), price=True),
+                                    text(row.get('bathrooms'))))
     return Snapshot(project, tuple(apartments), datetime.now(timezone.utc), total, sample)

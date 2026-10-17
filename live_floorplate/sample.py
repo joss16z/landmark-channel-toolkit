@@ -4,14 +4,24 @@ from .model import snapshot
 from .layout import parse_layout
 
 
+def source_preview(layout):
+    """All source Lots Available for a conspicuously synthetic layout stress test."""
+    rows=[dict(project='Hurstville Rise',lotnumber=lot,propertystatus='Available',
+               unit=f'TEST{lot}',bedrooms='2 Bed',bathrooms=2,internal=75,external=12,price=1000000)
+          for lot in layout.positions]
+    return snapshot(rows,len(rows),'Hurstville Rise',sample=True)
+
+
 def demonstration():
     rows,positions = [],[]
     for level in range(9):
         for index,status in enumerate(('Available','Held','Pending','Sold')):
             lot = f'DEMO-{level}-{index}'
             rows.append(dict(project='Hurstville Rise',lotnumber=lot,propertystatus=status,
-                             unit=f'DEMO-{level}0{index}',bedrooms='2 Bed',internal=75,external=12,price=1000000))
+                             unit=f'DEMO-{level}0{index}',bedrooms='2 Bed',bathrooms=2,internal=75,external=12,price=1000000))
             positions.append(dict(lotnumber=lot,level=level,x=.08+index*.23,y=.55,width=.2,height=.2))
+            group=0 if level==0 else 1 if level==1 else 2 if level<=4 else 3 if level<=7 else 4
+            positions[-1]['box_id']=f'{group}-{index}'
     doc = fitz.open()
     for title in ('Ground Level','Level 1','Levels 2–4','Levels 5–7','Level 8'):
         page = doc.new_page(width=960,height=540)
