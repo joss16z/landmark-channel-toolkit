@@ -1,6 +1,7 @@
 """Additive Streamlit page; no changes to existing Report Tools."""
 import hashlib
 import json
+import os
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 import fitz
@@ -16,8 +17,15 @@ from .sample import demonstration, source_preview
 KEY = 'live_floorplate_snapshot'
 
 
+def preview_only():
+    # Safe default for this unmerged internal test build. UI cannot change it.
+    return os.environ.get('LANDMARK_PREVIEW_ONLY','1')!='0'
+
+
 def synchronize_into(state, config, layout):
     state.pop(KEY,None)
+    if preview_only():
+        raise FloorplateError('Live API is disabled in the internal preview deployment')
     if config.get('project') != 'Hurstville Rise':
         raise FloorplateError('Wrong configured project')
     data = sync(config)
@@ -69,7 +77,14 @@ def show_snapshot(layout, pdf, style):
 
 def render_page():
     st.header('Live Floorplate — Hurstville Rise')
-    mode = st.radio('Data source',['Synthetic demonstration','Source PDF preview (synthetic inventory)','Configured Agent Portal API'],key='live_floorplate_mode')
+    modes=['Source PDF preview (synthetic inventory)','Synthetic demonstration']
+    if not preview_only():
+        modes.append('Configured Agent Portal API')
+    else:
+        st.info('Internal test deployment — live API disabled. No API credentials are needed.')
+    if st.session_state.get('live_floorplate_mode') not in modes:
+        st.session_state.pop('live_floorplate_mode',None)
+    mode = st.radio('Data source',modes,key='live_floorplate_mode')
     if st.session_state.get('live_floorplate_previous_mode') != mode:
         st.session_state.pop(KEY,None)
         st.session_state['live_floorplate_previous_mode'] = mode

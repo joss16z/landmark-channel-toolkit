@@ -217,12 +217,12 @@ class RefreshSafetyTests(unittest.TestCase):
         from live_floorplate.ui import synchronize_into,KEY
         data,layout,_=demonstration()
         state={KEY:data}
-        with patch('live_floorplate.ui.sync',side_effect=PermissionError('SENSITIVE_UPSTREAM_DETAIL')):
+        with patch.dict('os.environ',{'LANDMARK_PREVIEW_ONLY':'0'}),patch('live_floorplate.ui.sync',side_effect=PermissionError('SENSITIVE_UPSTREAM_DETAIL')):
             with self.assertRaises(PermissionError): synchronize_into(state,config(),layout)
         self.assertNotIn(KEY,state)
         state[KEY]=data
         unmatched=snapshot([row(lotnumber='UNMAPPED')],1,'Hurstville Rise')
-        with patch('live_floorplate.ui.sync',return_value=unmatched):
+        with patch.dict('os.environ',{'LANDMARK_PREVIEW_ONLY':'0'}),patch('live_floorplate.ui.sync',return_value=unmatched):
             with self.assertRaises(FloorplateError): synchronize_into(state,config(),layout)
         self.assertNotIn(KEY,state)
 

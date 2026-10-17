@@ -116,3 +116,28 @@ zero failures/errors/skips**. Added checks cover documented parameter dependenci
 missing keys/IDs, forbidden endpoints/guessed property paging, redaction of signed
 transport errors, configured error envelopes, and offline schema/coverage diagnostics.
 All previous 115-Lot mapping, five-slide rendering and Report Tools tests still pass.
+
+## Internal Community Cloud test-deployment preparation
+
+The feature branch now defaults to **preview-only**, hides the live API option,
+clears a previous API-mode selection and blocks synchronization server-side. No
+Secrets or credentials are required. Source PDF preview is the default inside
+Live Floorplate, with both existing Report Tools still accessible.
+
+The Cloud entrypoint remains root `app.py`; dependencies remain root
+`requirements.txt` and Linux `packages.txt`. `.streamlit/config.toml` retains
+CORS/XSRF protections, disables usage statistics and leaves bind address/port to
+Community Cloud. The Windows local launcher explicitly binds loopback instead.
+See the [separate Community Cloud checklist](community-cloud-internal-test.md).
+No production app settings or main files were changed; no hosted app was created.
+The owner must verify production tracks a separate branch, create a **new** test
+app and verify private, invited-only access before uploading originals. Current
+Cloud-account permissions/private-app quota remain unverified. Public Streamlit
+docs access was blocked by the execution network proxy (403); no bypass was used.
+
+Verification: **42 tests passed; zero failures/errors/skips**. A local Streamlit
+startup returned HTTP 200 from its health endpoint. Headless Chromium then used
+the actual app upload controls for the supplied original PDF and reference PPT,
+confirmed live API controls absent, and downloaded an exactly five-slide sample
+PowerPoint. That private loopback check is not proof of a hosted Cloud deployment
+or Cloud viewer privacy. The test server was stopped after verification.
