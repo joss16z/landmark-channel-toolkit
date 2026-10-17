@@ -32,7 +32,7 @@ class Style:
     fill: str = 'C2C7AD'
     ink: str = '000000'
     font: str = 'Arial'
-    size: float = 10
+    size: float = 12
     slide_width: float = 16.535433
     slide_height: float = 11.692913
 
@@ -108,7 +108,7 @@ def html_view(snapshot,layout,pdf_bytes,group,style=Style()):
     return f'''<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>
     body{{margin:0}} .canvas{{position:relative;width:100%;aspect-ratio:{width}/{height};container-type:inline-size}}
     img,svg{{width:100%;height:100%;display:block}} svg{{position:absolute;inset:0;pointer-events:none}}
-    .label{{position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;background:#{style.fill};color:#{style.ink};font-family:"{escape(style.font)}",Arial,sans-serif;line-height:1.19;border:1px solid #777;border-radius:9px;overflow:hidden;padding:3px 4px}}\n    .label>span{{display:flex;flex-direction:column;align-items:center;width:100%}} .label-row{{display:block;white-space:nowrap;width:100%}} .detail-row{{font-weight:600}} .unit-row{{font-weight:400}}
+    .label{{position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;background:#{style.fill};color:#{style.ink};font-family:"{escape(style.font)}",Arial,sans-serif;line-height:1.16;font-weight:700;border:2px solid #222;border-radius:16px;overflow:hidden;padding:4px 5px}}\n    .label>span{{display:flex;flex-direction:column;align-items:center;width:100%}} .label-row{{display:block;white-space:nowrap;width:100%;font-weight:700}}
     </style></head><body><div class="canvas"><img alt="Original floorplate artwork" src="data:image/png;base64,{base64.b64encode(png).decode()}"><svg viewBox="0 0 1000 1000" preserveAspectRatio="none">{''.join(leaders)}</svg>{''.join(boxes)}</div></body></html>'''
 
 
@@ -129,17 +129,17 @@ def powerpoint(snapshot,layout,pdf_bytes,style=Style()):
             shape=slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,Inches(pos.x*sw),Inches(pos.y*sh),
                                         Inches(pos.width*sw),Inches(pos.height*sh))
             shape.fill.solid();shape.fill.fore_color.rgb=RGBColor.from_string(style.fill)
-            shape.line.color.rgb=RGBColor.from_string(style.fill)
+            shape.line.color.rgb=RGBColor.from_string('222222')\n            shape.line.width=Pt(1.5)
             shape.text_frame.word_wrap=False;shape.text_frame.vertical_anchor=MSO_ANCHOR.MIDDLE
-            shape.text_frame.margin_left=shape.text_frame.margin_right=Inches(.025)
-            shape.text_frame.margin_top=shape.text_frame.margin_bottom=Inches(.025)
+            shape.text_frame.margin_left=shape.text_frame.margin_right=Inches(.04)
+            shape.text_frame.margin_top=shape.text_frame.margin_bottom=Inches(.04)
             shape.text,size=fitted_label(label,pos,style)
             for paragraph in shape.text_frame.paragraphs:
                 paragraph.alignment=PP_ALIGN.CENTER
                 paragraph.space_before=Pt(0)
                 paragraph.space_after=Pt(0)
                 paragraph.font.name,paragraph.font.size=style.font,Pt(size)
-                paragraph.font.bold=not paragraph.text.startswith('Unit ')
+                paragraph.font.bold=True
                 paragraph.font.color.rgb=RGBColor.from_string(style.ink)
         footer=slide.shapes.add_textbox(Inches(3.5),Inches(sh-.23),Inches(sw-4),Inches(.18))
         footer.text=f'{"SAMPLE — " if snapshot.sample else ""}{title} | As of {snapshot.synced_at.isoformat()} | Owner review required'
