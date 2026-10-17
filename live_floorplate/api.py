@@ -35,21 +35,38 @@ def path_value(value, path):
     return value
 
 
-def fetch_page(url, headers):
-    # Redirects rejected BEFORE sending headers to any redirect destination.
+def fetch_json_response(url, headers):
+    """Internal transport: return status and parsed body, never transport exceptions.
+
+    Caller must not display the body. Redirects are rejected before forwarding
+    credentials; errors retain only a numeric HTTP status, when available.
+    """
+    from urllib.error import HTTPError
+    status = None
     try:
         with build_opener(NoRedirect()).open(Request(url, headers=headers, method='GET'), timeout=20) as response:
-            if origin(response.url) != origin(url) or response.status != 200:
-                raise FloorplateError('Endpoint access failed')
+            status = response.status
+            if origin(response.url) != origin(url) or status != 200:
+                return status, None
             if response.headers.get_content_type() != 'application/json':
-                raise FloorplateError('Unexpected endpoint content')
+                return status, None
             data = response.read(10_000_001)
             if len(data) > 10_000_000:
-                raise FloorplateError('Endpoint response too large')
-            return json.loads(data)
+                return status, None
+            return status, json.loads(data)
+    except HTTPError as error:
+        status = error.code
+        error.close()
     except Exception:
-        # Transport exceptions can include the complete credential-bearing URL.
+        pass
+    return status, None
+
+
+def fetch_page(url, headers):
+    status, payload = fetch_json_response(url, headers)
+    if status != 200 or payload is None:
         raise FloorplateError('Official API request failed; inspect access and contract in the approved environment') from None
+    return payload
 
 
 

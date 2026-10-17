@@ -8,6 +8,7 @@ import fitz
 import streamlit as st
 import streamlit.components.v1 as components
 from .api import sync
+from .connection_test import connection_report
 from .layout import parse_layout, matched
 from .source_mapping import GROUPS
 from .model import FloorplateError
@@ -75,13 +76,40 @@ def show_snapshot(layout, pdf, style):
         st.error('Unable to render a verified floorplate. Check every Available Lot mapping, PDF and label style. Prices are hidden.')
 
 
+def render_connection_test():
+    with st.expander('Arcanite connection diagnostics'):
+        st.caption('Optional read-only server request. Does not synchronize prices or certify authentication, visibility or completeness. Use only in an approved, access-restricted deployment.')
+        if st.button('Test Arcanite Connection',key='test_arcanite_connection'):
+            try:
+                report = connection_report(st.secrets['arcanite'])
+            except Exception:
+                report = {'http_status':None,'ok':False}
+            status = report['http_status']
+            st.write('HTTP status: ' + (str(status) if status is not None else 'unavailable'))
+            if not report['ok']:
+                st.error('Connection or response validation failed. Check server-side configuration and authorized access. Live price synchronization remains disabled.')
+            summary = report.get('summary')
+            if summary:
+                st.dataframe([{'Field':key,'Types':', '.join(types)}
+                              for key,types in summary['response_fields'].items()],hide_index=True)
+                for array in summary['property_arrays']:
+                    st.caption('Property array field: ' + array['rows_path'])
+                    st.write({key:array[key] for key in ('row_count','unique_lots','invalid_lot_rows','duplicate_lot_rows')})
+                    st.dataframe([{'Field':key,'Types':', '.join(types)}
+                                  for key,types in array['fields'].items()],hide_index=True)
+                    st.dataframe([{'Status':key,'Count':value}
+                                  for key,value in array['status_counts'].items()],hide_index=True)
+                st.warning('Structure diagnostics only. Live prices, full inventory visibility and completeness remain unverified; no inventory snapshot was created.')
+
+
 def render_page():
     st.header('Live Floorplate — Hurstville Rise')
+    render_connection_test()
     modes=['Source PDF preview (synthetic inventory)','Synthetic demonstration']
     if not preview_only():
         modes.append('Configured Agent Portal API')
     else:
-        st.info('Internal test deployment — live API disabled. No API credentials are needed.')
+        st.info('Internal test deployment — live price synchronization disabled. Synthetic preview needs no credentials; optional connection diagnostics use server-side Secrets only.')
     if st.session_state.get('live_floorplate_mode') not in modes:
         st.session_state.pop('live_floorplate_mode',None)
     mode = st.radio('Data source',modes,key='live_floorplate_mode')

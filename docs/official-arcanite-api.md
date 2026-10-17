@@ -112,3 +112,42 @@ results fail closed. A failed refresh removes prior labels before requesting dat
 The existing 115-Lot mapping, five-slide export and five-group source-PDF preview
 remain independently usable with clearly synthetic data while response verification
 is pending. No source document or confidential response is committed.
+
+## Manual connection diagnostic (no inventory synchronization)
+
+On the Live Floorplate page, expand **Arcanite connection diagnostics** and click
+**Test Arcanite Connection**. No request occurs merely by opening the page. Use
+this only in a company-approved deployment with restricted viewer access: an
+invited viewer who can access this page can trigger the server-side request.
+Do not add credentials to a public/unrestricted test deployment.
+
+In Streamlit's server-side Secrets editor (or an ignored local
+`.streamlit/secrets.toml` on the approved computer), configure:
+
+```toml
+[arcanite]
+agencyid = "REPLACE_LOCALLY"
+sign = "REPLACE_LOCALLY"
+projectid = "907440240"
+```
+
+These are placeholders, not credentials. The existing `[arcanite.query]` form
+also works; conflicting direct/nested values fail before any request. Do not
+paste a signed URL, upload Secrets, or commit the local Secrets file. The test
+uses only these three parameters, the fixed official getProject endpoint, GET,
+a 20-second timeout and the existing 10 MB response limit. It sends no additional
+headers, follows no redirects, caches no response and saves no diagnostic files.
+
+The display contains only HTTP status (or unavailable), field names/types, Lot
+counts and fixed status-category counts. Unknown status values are counted as
+`unknown`, never displayed. Raw JSON, Lot identifiers, unit numbers, prices and
+credential values are not displayed or logged. Errors are fixed messages, not
+transport exception text. HTTP 200 and a property-shaped array are only
+structural observations: they do not prove authentication, all-status visibility,
+completeness or price validity. An absent/changed property array fails the test.
+
+This diagnostic neither calls inventory `sync()` nor creates a snapshot. Keep
+`LANDMARK_PREVIEW_ONLY` at its safe default; do not change `enabled` or
+`contract_verified` to run the diagnostic. Failed tests leave live price sync
+disabled. Actual response schema, authorized visibility and completeness remain
+pending owner review; this change was tested using synthetic responses only.

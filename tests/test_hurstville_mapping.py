@@ -93,7 +93,7 @@ class SourceMappingTests(unittest.TestCase):
         self.assertEqual(sum(len(information_boxes(data,layout,g)) for g in range(5)),57)
         for group,slide in enumerate(prs.slides):
             text='\n'.join(s.text for s in slide.shapes if s.has_text_frame)
-            for lot in range(GROUPS[group][2],GROUPS[group][3]+1):self.assertIn(f'Unit TEST{lot} ',text)
+            for lot in range(GROUPS[group][2],GROUPS[group][3]+1):self.assertRegex(text,rf'Unit TEST{lot}(?:\s|$)')
             self.assertEqual(sum(s.shape_type==13 for s in slide.shapes),1)
             for shape in slide.shapes:
                 if shape.shape_type==1:

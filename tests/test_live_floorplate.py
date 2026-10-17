@@ -166,7 +166,7 @@ class RenderingTests(unittest.TestCase):
                 self.assertIn(f'Unit DEMO-{level}00',text)
                 for unavailable in (1,2,3): self.assertNotIn(f'Unit DEMO-{level}0{unavailable}',text)
             self.assertIn('2 Bed',text)
-            self.assertIn('75 + 12 m²',text)
+            self.assertIn('75m² + 12m²',text)
             self.assertIn('$1,000,000',text)
             self.assertEqual(sum(s.shape_type == 13 for s in slide.shapes),1)
 

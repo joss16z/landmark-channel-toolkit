@@ -141,3 +141,19 @@ the actual app upload controls for the supplied original PDF and reference PPT,
 confirmed live API controls absent, and downloaded an exactly five-slide sample
 PowerPoint. That private loopback check is not proof of a hosted Cloud deployment
 or Cloud viewer privacy. The test server was stopped after verification.
+
+## Connection diagnostic regression validation
+
+Added an explicit `Test Arcanite Connection` action independent of inventory
+synchronization. Synthetic tests cover direct/nested server Secrets, conflicting
+or missing configuration, 401/403 responses, denied redirects, foreign response
+origins, non-JSON/malformed/oversized bodies, redacted failures, and button-driven
+success/failure without inventory snapshot creation. Summary inspection includes
+field names/types, Lot counts and fixed status counts only. A structural result
+cannot certify live authentication, authorized inventory scope or completeness.
+
+Validation: `.venv/bin/python -m unittest discover -s tests -q` — **50 tests passed**.
+Existing PPT tests were aligned with the branch's previously updated area format
+and wrapped Unit labels; five-slide and availability checks remain active.
+No live endpoint was called, no credentials were used, and live synchronization
+remains disabled in the default internal preview deployment.

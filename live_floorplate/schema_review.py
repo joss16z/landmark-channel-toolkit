@@ -11,7 +11,7 @@ from .model import lot_key
 
 
 def inspect_response(payload):
-    arrays=[];metadata=[];visited=0
+    arrays=[];metadata=[];visited=0;structure={}
     def walk(value,path,depth=0):
         nonlocal visited
         visited+=1
@@ -22,6 +22,7 @@ def inspect_response(payload):
                 if not isinstance(key,str) or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]{0,79}',key):
                     continue
                 child=f'{path}.{key}' if path else key
+                structure.setdefault(child,set()).add(type(item).__name__)
                 if re.search(r'total|count|page|hasmore|projectid|success|errorcode|^code$|^status$',key,re.I):
                     metadata.append({'path':child,'type':type(item).__name__})
                 walk(item,child,depth+1)
@@ -55,6 +56,7 @@ def inspect_response(payload):
             if rows:walk(rows[0],path+'[]',depth+1)
     walk(payload,'')
     return {'property_arrays':arrays,'metadata_candidates':metadata,
+            'response_fields':{key:sorted(types) for key,types in sorted(structure.items())},
             'endpoint_completeness_verified':False,'contains_raw_field_values':False}
 
 
