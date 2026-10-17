@@ -84,10 +84,17 @@ def fitted_label(label,pos,style):
         lines=[]
         for line in label.splitlines():
             if line.startswith('Unit ') and len(line)>chars:
-                lines=[]
-                break
-            lines.extend(textwrap.wrap(line,width=chars,break_long_words=False,break_on_hyphens=False) or [''])
-        if any(len(line)>chars for line in lines): continue
+                # Preserve content: long demo unit/price rows may use two lines.
+                unit, separator, price = line.partition(' - ')
+                if separator and len(unit)<=chars and len(price)<=chars:
+                    lines.extend([unit,price])
+                else:
+                    lines.extend(textwrap.wrap(line,width=chars,break_long_words=False,
+                                               break_on_hyphens=False) or [line])
+            else:
+                lines.extend(textwrap.wrap(line,width=chars,break_long_words=False,
+                                           break_on_hyphens=False) or [line])
+        if not lines or any(len(line)>chars for line in lines): continue
         if len(lines)*size*1.19 <= pos.height*style.slide_height*72-8:
             return '\n'.join(lines),size
     raise FloorplateError('Information box cannot fit all Available data legibly')
