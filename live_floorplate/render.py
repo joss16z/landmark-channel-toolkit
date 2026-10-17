@@ -99,7 +99,8 @@ def powerpoint(snapshot, layout, pdf_bytes, style=Style()):
         level = levels[0]
         slide = prs.slides.add_slide(prs.slide_layouts[6])
         title = slide.shapes.add_textbox(Inches(.2),0,Inches(sw-.4),Inches(.5))
-        title.text = f'{"SAMPLE — " if snapshot.sample else ""}{snapshot.project} — {level_title(level) if len(levels) == 1 else f'Levels {levels[0]}–{levels[-1]}'}'
+        group_title = level_title(level) if len(levels) == 1 else f'Levels {levels[0]}–{levels[-1]}'
+        title.text = f'{"SAMPLE — " if snapshot.sample else ""}{snapshot.project} — {group_title}'
         title.text_frame.paragraphs[0].font.size = Pt(20)
         png,pw,ph = pdf_image(pdf_bytes,layout.pages[level])
         ratio = min(sw/pw,(sh-1.2)/ph)
