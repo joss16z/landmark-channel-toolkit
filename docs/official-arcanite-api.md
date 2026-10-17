@@ -151,3 +151,71 @@ This diagnostic neither calls inventory `sync()` nor creates a snapshot. Keep
 `contract_verified` to run the diagnostic. Failed tests leave live price sync
 disabled. Actual response schema, authorized visibility and completeness remain
 pending owner review; this change was tested using synthetic responses only.
+
+## HTTP 403 request audit and approved diagnosis
+
+Audit against the owner-supplied official guide, pages 4–5:
+
+- Endpoint: `https://service.arcnet.com.au/arc-service-api/v1/project/getProject`.
+- Method: GET; no request body. Required query keys are exactly `agencyid`,
+  `projectid`, `sign`. getProjectList filters/paging are not sent.
+- `sign` is the guide's fixed API key, not a calculated signature or a Bearer
+  token. Browser Agent Portal login cookies are not this API's documented
+  authentication mechanism. Do not introduce a guessed signing algorithm,
+  browser Cookie, Referer or administrative credentials to address a 403.
+- `connection_test.py` resolves direct/nested server Secrets;
+  `official_api.py` checks the documented parameter contract;
+  `api.py` sends the explicit GET with redirects disabled. `urlencode` encodes
+  query values once, and URL fragments cannot consume parameter values.
+  Supply the **raw** key in Secrets, not an already percent-encoded key, a full
+  signed URL, an `Authorization` value, or a `sign=` prefix. The builder trims
+  surrounding whitespace, but it cannot detect an expired or wrong key.
+- Synthetic tests exercise the complete path down to the urllib Request,
+  including reserved characters (`+`, `/`, `&`, `=`, `%`, `?`, `#`) and Unicode,
+  both Secrets forms, exact keys/method/body, timeout and redirect handler.
+  No request-construction defect was found in this audit; no speculative
+  transport/authentication change was made.
+
+An HTTP 403 is retained from the HTTP transport before schema inspection. A
+missing/conflicting Secrets configuration fails before network access with no
+HTTP status; malformed JSON/unknown schema cannot manufacture an HTTP 403.
+However, HTTP status alone **does not identify the responding layer** or prove
+that authentication failed. The vendor API, a reverse proxy, WAF, egress proxy
+or another gateway can return 403. Wrong/expired credentials, agency/project
+permissions and source-IP policy are possibilities, not confirmed diagnoses.
+The urllib client normally has a Python User-Agent rather than a browser one;
+a WAF may apply client-header rules, but the guide establishes no extra header
+requirement. Do not spoof a browser or bypass access controls to test a theory.
+
+### Next steps for the owner and company IT
+
+1. In the **test app's private server Secrets settings**, locally check the
+   agency/key pairing, current key and project ID `907440240`. Do not post the
+   values or signed URL. A successful Agent Portal browser login does not prove
+   that this separate third-party API key has project access.
+2. With explicit company approval, compare the same documented GET and key on
+   an approved work computer using the same Python connector and the company's
+   approved API client. Disable client request/response logging/history exports;
+   keep results and credentials local. Do not send raw responses back to GitHub
+   or Codex. This audit did not perform any live comparison.
+3. Interpret the comparison cautiously:
+
+   | Observation | What it narrows down; what remains unproven |
+   | --- | --- |
+   | Both approved clients fail locally | Ask Arcanite to check key activation, agency/project authorization and API policy. A common network restriction is still possible. |
+   | Approved local connector succeeds, Cloud test fails | Investigate Cloud egress IP/region, proxy and WAF policy with IT/vendor. It is not evidence of a signature-algorithm bug. |
+   | Approved API client succeeds but Python fails on the same computer | Compare request method, query encoding and approved headers/proxy settings locally. Have IT/vendor identify the differing rule before any code change. |
+
+4. Give Arcanite/IT only the UTC attempt time, non-sensitive endpoint path,
+   HTTP status and environment (approved PC or internal Cloud app); they can
+   correlate their server/WAF logs and provide a sanitized rejection reason.
+   Ask whether the key is active for this agency/project, whether the API is
+   enabled, whether source-IP allowlisting is required and which layer rejected
+   the call. Never share the key, query URL, cookies or inventory in a ticket.
+   Do not disable a proxy/WAF or change networks to evade a restriction.
+
+The app discards error bodies and does not log request URLs or exception text.
+Because this official protocol carries the key in the query, IT/vendor must
+also ensure infrastructure/access logs redact query credentials; application
+redaction cannot guarantee third-party logging behavior. Do not enable live
+price synchronization based on a successful connection diagnostic alone.

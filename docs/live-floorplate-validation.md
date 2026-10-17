@@ -157,3 +157,16 @@ Existing PPT tests were aligned with the branch's previously updated area format
 and wrapped Unit labels; five-slide and availability checks remain active.
 No live endpoint was called, no credentials were used, and live synchronization
 remains disabled in the default internal preview deployment.
+
+### HTTP 403 audit follow-up
+
+Compared `connection_test.py`, `official_api.py` and `api.py` with the official
+request contract on guide pages 4–5. No endpoint/method/query-authentication
+construction mismatch was found. Added network-boundary regressions for the
+exact GET request and single encoding of synthetic reserved characters, plus a
+403-before-schema test. The vendor/gateway rejection source remains unverified.
+
+Full suite: `.venv/bin/python -m unittest discover -s tests -q` — **52 passed**.
+No live request, credential inspection, production change or price-sync enablement
+was performed. Approved-client comparison and vendor/IT log correlation are still
+required to separate credential/project authorization failure from network policy.

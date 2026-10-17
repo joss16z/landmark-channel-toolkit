@@ -4,6 +4,7 @@ import unittest
 from email.message import Message
 from unittest.mock import Mock, patch
 from urllib.error import HTTPError
+from urllib.parse import urlsplit, parse_qs
 from live_floorplate.connection_test import connection_report
 from live_floorplate.api import fetch_json_response, NoRedirect
 from live_floorplate.model import FloorplateError
@@ -15,6 +16,48 @@ PAYLOAD={'data':{'properties':[{'lotnumber':1,'unitnumber':'PRIVATE_UNIT',
 
 
 class ConnectionTests(unittest.TestCase):
+    def test_documented_request_reaches_transport_as_get_query_not_body(self):
+        # Exercise all three modules together, mocking only the network boundary.
+        # The key is synthetic; reserved characters must survive ONE decode.
+        for key in ('SYNTHETIC_SECRET', 'SYNTHETIC+a/b&c=d%25?e#f ü'):
+            for config in ({**CONFIG, 'sign':key}, {'query':{**CONFIG,'sign':key}}):
+                response=Mock(status=200,url='https://service.arcnet.com.au/arc-service-api/v1/project/getProject')
+                response.headers=Message();response.headers['Content-Type']='application/json'
+                response.read.return_value=b'{"properties":[{"lotnumber":1,"propertystatus":"Available"}]}'
+                with patch('live_floorplate.api.build_opener') as opener:
+                    opener.return_value.open.return_value.__enter__.return_value=response
+                    report=connection_report(config)
+                    self.assertTrue(report['ok'])
+                    request=opener.return_value.open.call_args.args[0]
+                    parsed=urlsplit(request.full_url)
+                    self.assertEqual(parsed.scheme,'https')
+                    self.assertEqual(parsed.netloc,'service.arcnet.com.au')
+                    self.assertEqual(parsed.path,'/arc-service-api/v1/project/getProject')
+                    self.assertEqual(parsed.fragment,'')
+                    self.assertEqual(request.get_method(),'GET')
+                    self.assertIsNone(request.data)
+                    self.assertEqual(parse_qs(parsed.query),{
+                        'agencyid':[CONFIG['agencyid']], 'projectid':[CONFIG['projectid']], 'sign':[key]})
+                    self.assertFalse(request.has_header('Authorization'))
+                    self.assertFalse(request.has_header('Cookie'))
+                    self.assertEqual(opener.return_value.open.call_args.kwargs,{'timeout':20})
+                    self.assertIsInstance(opener.call_args.args[0],NoRedirect)
+                    response.read.assert_called_once_with(10_000_001)
+
+    def test_http_403_is_transport_status_not_schema_failure_or_auth_classification(self):
+        # The client cannot distinguish a vendor 403 from a gateway/WAF 403.
+        body=io.BytesIO(b'PRIVATE_PRICE PRIVATE_UNIT SYNTHETIC_SECRET')
+        error=HTTPError('https://fixture.invalid/?sign=SYNTHETIC_SECRET',403,
+                        'PRIVATE_UNIT',{},body)
+        with patch('live_floorplate.api.build_opener') as opener, \
+                patch('live_floorplate.connection_test.inspect_response') as inspect:
+            opener.return_value.open.side_effect=error
+            report=connection_report(CONFIG)
+            self.assertEqual(report,{'http_status':403,'ok':False})
+            inspect.assert_not_called()
+            opener.return_value.open.assert_called_once()
+            self.assertTrue(body.closed)
+
     def test_structure_only_and_both_secrets_formats(self):
         for config in (CONFIG,{'query':CONFIG}):
             with patch('live_floorplate.connection_test.fetch_json_response',return_value=(200,PAYLOAD)) as fetch:
