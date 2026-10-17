@@ -14,6 +14,19 @@ from floorplate_update_report_v8 import _shape_has_coloured_solid_fill, normaliz
 from .model import FloorplateError
 from .layout import LEVELS, level_title, matched
 
+FLOOR_GROUPS = ((0,), (1,), (2, 3, 4), (5, 6, 7), (8,))
+
+def grouped_labels(snapshot, layout, levels):
+    """Combine Available units at identical confirmed label positions across shared levels."""
+    groups = {}
+    for apartment, position in matched(snapshot, layout):
+        if position.level not in levels:
+            continue
+        key = (position.x, position.y, position.width, position.height)
+        groups.setdefault(key, []).append((position.level, apartment, position))
+    return [(items[0][2], '\n'.join(a.label for _, a, _ in sorted(items, key=lambda item: (item[0], item[1].unit)))) for items in groups.values()]
+
+
 
 @dataclass(frozen=True)
 class Style:
@@ -65,12 +78,12 @@ def pdf_image(pdf_bytes, page_index):
 
 
 def html_view(snapshot, layout, pdf_bytes, level, style=Style()):
-    pairs = matched(snapshot,layout,level)
-    png,width,height = pdf_image(pdf_bytes,layout.pages[level])
+    levels = level if isinstance(level, tuple) else (level,)
+    png,width,height = pdf_image(pdf_bytes,layout.pages[levels[0]])
     boxes = []
-    for apt,pos in pairs:
-        label = escape(apt.label).replace('\n','<br>')
-        boxes.append(f'<div class="label" style="left:{pos.x*100}%;top:{pos.y*100}%;width:{pos.width*100}%;height:{pos.height*100}%" aria-label="Unit {escape(normalize_unit(apt.unit))}"><span>{label}</span></div>')
+    for pos, label_text in grouped_labels(snapshot, layout, levels):
+        label = escape(label_text).replace('\\n','<br>')
+        boxes.append(f'<div class="label" style="left:{pos.x*100}%;top:{pos.y*100}%;width:{pos.width*100}%;height:{pos.height*100}%" aria-label="Available apartment"><span>{label}</span></div>')
     return f'''<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>
     body{{margin:0;font-family:Arial}} .canvas{{position:relative;width:100%;aspect-ratio:{width}/{height}}}
     img{{width:100%;height:100%;display:block}} .label{{position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;background:#{style.fill};color:#{style.ink};font-family:{escape(style.font)};font-size:clamp(8px,1.2vw,16px);border:1px solid #333;overflow:auto}}
@@ -82,17 +95,18 @@ def powerpoint(snapshot, layout, pdf_bytes, style=Style()):
     prs = Presentation()
     sw,sh = style.slide_width,style.slide_height
     prs.slide_width,prs.slide_height = Inches(sw),Inches(sh)
-    for level in LEVELS:
+    for levels in FLOOR_GROUPS:
+        level = levels[0]
         slide = prs.slides.add_slide(prs.slide_layouts[6])
         title = slide.shapes.add_textbox(Inches(.2),0,Inches(sw-.4),Inches(.5))
-        title.text = f'{"SAMPLE — " if snapshot.sample else ""}{snapshot.project} — {level_title(level)}'
+        title.text = f'{"SAMPLE — " if snapshot.sample else ""}{snapshot.project} — {level_title(level) if len(levels) == 1 else f'Levels {levels[0]}–{levels[-1]}'}'
         title.text_frame.paragraphs[0].font.size = Pt(20)
         png,pw,ph = pdf_image(pdf_bytes,layout.pages[level])
         ratio = min(sw/pw,(sh-1.2)/ph)
         width,height = pw*ratio,ph*ratio
         left,top = (sw-width)/2,.6+(sh-1.2-height)/2
         slide.shapes.add_picture(io.BytesIO(png),Inches(left),Inches(top),Inches(width),Inches(height))
-        for apt,pos in matched(snapshot,layout,level):
+        for pos,label_text in grouped_labels(snapshot,layout,levels):
             shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,Inches(left+pos.x*width),
                 Inches(top+pos.y*height),Inches(pos.width*width),Inches(pos.height*height))
             shape.fill.solid()
@@ -101,7 +115,7 @@ def powerpoint(snapshot, layout, pdf_bytes, style=Style()):
             shape.text_frame.word_wrap = True
             shape.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
             shape.text_frame.margin_left = shape.text_frame.margin_right = Inches(.03)
-            shape.text = apt.label
+            shape.text = label_text
             for p in shape.text_frame.paragraphs:
                 p.alignment = PP_ALIGN.CENTER
                 p.font.name,p.font.size = style.font,Pt(style.size)
