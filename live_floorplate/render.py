@@ -129,7 +129,8 @@ def powerpoint(snapshot,layout,pdf_bytes,style=Style()):
             shape=slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,Inches(pos.x*sw),Inches(pos.y*sh),
                                         Inches(pos.width*sw),Inches(pos.height*sh))
             shape.fill.solid();shape.fill.fore_color.rgb=RGBColor.from_string(style.fill)
-            shape.line.color.rgb=RGBColor.from_string('222222')\n            shape.line.width=Pt(1.5)
+            shape.line.color.rgb=RGBColor.from_string('222222')
+            shape.line.width=Pt(1.5)
             shape.text_frame.word_wrap=False;shape.text_frame.vertical_anchor=MSO_ANCHOR.MIDDLE
             shape.text_frame.margin_left=shape.text_frame.margin_right=Inches(.04)
             shape.text_frame.margin_top=shape.text_frame.margin_bottom=Inches(.04)
