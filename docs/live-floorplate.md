@@ -69,8 +69,10 @@ Use `.streamlit/secrets.toml.example` to configure only the approved server.
 It is disabled and contains placeholders. Put `agencyid`, `sign` and the verified
 Hurstville `projectid` in `[arcanite.query]`. Never put them in browser inputs,
 Git, logs, screenshots, PRs or chat. No live login, endpoint discovery or live API
-request was performed here. No project-list response or getProject payload has yet
-been supplied. The redacted response is being prepared by the owner.
+request was performed here. The official request guide has been reviewed and project ID 907440240 is confirmed.
+No project-list response or getProject payload has yet been supplied. The redacted
+response is being prepared by the owner. See [the exact request contract and
+unverified response fields](official-arcanite-api.md).
 
 The account is a standard Agent Portal account, not an administrator/backend account.
 Use only the verified read-only request and inventory legitimately visible to it.
@@ -94,7 +96,9 @@ The adapter is configurable rather than asserting unobserved response fields:
   full-project 115-Lot contract, configure all 115 Lots only after verification.
   Do not pretend this proves completeness of an intentionally restricted subset.
 - `pagination=single` is allowed only for a verified complete single response;
-  `next_link` requires a real `next_path` terminating in explicit null. Offset,
+  `next_link` in the generic adapter requires a real `next_path` terminating in explicit
+  null, but the official getProject profile rejects it because the guide documents
+  paging only for project lists. Offset,
   cursor, nested-array or POST-based contracts require a separately verified adapter.
   GET-only does not itself prove read-only semantics.
 

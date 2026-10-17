@@ -37,15 +37,20 @@ def path_value(value, path):
 
 def fetch_page(url, headers):
     # Redirects rejected BEFORE sending headers to any redirect destination.
-    with build_opener(NoRedirect()).open(Request(url, headers=headers, method='GET'), timeout=20) as response:
-        if origin(response.url) != origin(url) or response.status != 200:
-            raise FloorplateError('Endpoint access failed')
-        if response.headers.get_content_type() != 'application/json':
-            raise FloorplateError('Unexpected endpoint content')
-        data = response.read(10_000_001)
-        if len(data) > 10_000_000:
-            raise FloorplateError('Endpoint response too large')
-        return json.loads(data)
+    try:
+        with build_opener(NoRedirect()).open(Request(url, headers=headers, method='GET'), timeout=20) as response:
+            if origin(response.url) != origin(url) or response.status != 200:
+                raise FloorplateError('Endpoint access failed')
+            if response.headers.get_content_type() != 'application/json':
+                raise FloorplateError('Unexpected endpoint content')
+            data = response.read(10_000_001)
+            if len(data) > 10_000_000:
+                raise FloorplateError('Endpoint response too large')
+            return json.loads(data)
+    except Exception:
+        # Transport exceptions can include the complete credential-bearing URL.
+        raise FloorplateError('Official API request failed; inspect access and contract in the approved environment') from None
+
 
 
 def sync(config, fetch=fetch_page):
@@ -59,6 +64,14 @@ def sync(config, fetch=fetch_page):
     if config.get('account_scope') != 'agent_portal' or config.get('method') != 'GET':
         raise FloorplateError('Only approved Agent Portal read requests supported')
     url = config['url']
+    if config.get('api_profile')=='arcanite_landmark_v1':
+        from .official_api import request_parameters
+        url,official_query=request_parameters(config,'getProject')
+        config={**config,'query':official_query}
+        # The guide does not document property next-link paging. Do not follow
+        # guessed links with the API key; a different contract needs verification.
+        if config.get('pagination')!='single':
+            raise FloorplateError('Official property pagination is not established')
     allowed = origin(url)
     # Signed query values are Secrets, never browser props/report metadata.
     query = config.get('query', {})
@@ -105,6 +118,11 @@ def sync(config, fetch=fetch_page):
             raise FloorplateError('Unsafe or repeated pagination URL')
         seen.add(url)
         payload = fetch(url, headers)
+        if config.get('success_path'):
+            success=path_value(payload,config['success_path'])
+            expected_success=config.get('success_value')
+            if type(success) is not type(expected_success) or success!=expected_success:
+                raise FloorplateError('API response does not confirm success')
         if config.get('scope_path'):
             if str(path_value(payload,config['scope_path'])) != str(config['query']['projectid']):
                 raise FloorplateError('Response project identity differs from request')

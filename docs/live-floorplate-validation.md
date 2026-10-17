@@ -86,8 +86,8 @@ above were run separately against the private supplied originals.
   all 115 including unavailable properties; it must not be used if the authorized
   endpoint intentionally returns a subset. Unsupported/unknown completeness stays
   blocked. No pagination or metadata fields are invented for the real service.
-- Verified project ID, schema paths, response scope and authentication configuration
-  still require the authorized operator. API signs stay in server-side Secrets.
+- Project ID 907440240 is now owner-confirmed. Schema paths, response scope and
+  authentication configuration still require verification. API keys stay in Secrets.
 - Owner visual approval remains required for publication. This reproduces the
   five-slide structure/style, not every historical box coordinate, since that PPT
   labels only its then-Available subset. New coordinates cover every footprint.
@@ -96,3 +96,23 @@ above were run separately against the private supplied originals.
   and final company-device visual approval are still pending.
 - No missing Lot becomes Sold. No official Internal/External Floorplate, Dropbox
   file or inventory is automatically modified or published.
+
+## Official request documentation follow-up
+
+The official Landmark integration guide has now been reviewed. GET methods,
+endpoint paths and required agencyid/projectid/sign parameters are documented;
+sign is the fixed API key. Hurstville project ID **907440240** is owner-confirmed.
+The official request builder enforces these parameters and restricts documented
+project-list filters/paging to getProjectList. Live sync remains disabled because
+property schema, status/price visibility and completeness are still unverified.
+
+See [the request/schema review](official-arcanite-api.md) for the exact outstanding
+response fields and vendor guarantees. An offline schema inspector supplies
+structural diagnostics without raw property or credential values. The mapping
+and five-group rendering continue unchanged; the API guide PDF is not committed.
+
+Follow-up suite: `.venv/bin/python -m unittest discover -s tests -q` — **40 passed,
+zero failures/errors/skips**. Added checks cover documented parameter dependencies,
+missing keys/IDs, forbidden endpoints/guessed property paging, redaction of signed
+transport errors, configured error envelopes, and offline schema/coverage diagnostics.
+All previous 115-Lot mapping, five-slide rendering and Report Tools tests still pass.

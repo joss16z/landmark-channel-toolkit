@@ -225,3 +225,11 @@ class RefreshSafetyTests(unittest.TestCase):
         with patch('live_floorplate.ui.sync',return_value=unmatched):
             with self.assertRaises(FloorplateError): synchronize_into(state,config(),layout)
         self.assertNotIn(KEY,state)
+
+
+class ResponseSuccessTests(unittest.TestCase):
+    def test_configured_success_marker_rejects_error_envelope(self):
+        cfg=config();cfg.update(success_path='success',success_value=True,pagination='single')
+        for marker in (False,1,'true'):
+            fetch=Mock(return_value={'success':marker,'records':[row()],'count':1})
+            with self.assertRaises(FloorplateError):sync(cfg,fetch)
