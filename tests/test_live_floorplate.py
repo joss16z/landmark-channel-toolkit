@@ -132,17 +132,18 @@ class APITests(unittest.TestCase):
 
 
 class RenderingTests(unittest.TestCase):
-    def test_ppt_has_nine_slides_and_only_available_labels(self):
+    def test_ppt_has_five_grouped_slides_and_only_available_labels(self):
         data,layout,pdf = demonstration()
         prs = Presentation(io.BytesIO(powerpoint(data,layout,pdf)))
-        self.assertEqual(len(prs.slides),9)
-        for level,slide in enumerate(prs.slides):
+        self.assertEqual(len(prs.slides),5)
+        for slide,levels in zip(prs.slides, ((0,), (1,), (2,3,4), (5,6,7), (8,))):
             text = '\n'.join(s.text for s in slide.shapes if s.has_text_frame)
-            self.assertIn(f'Unit DEMO-{level}00',text)
+            for level in levels: self.assertIn(f'Unit DEMO-{level}00',text)
             self.assertIn('2 Bed',text)
             self.assertIn('75 + 12 m²',text)
             self.assertIn('$1,000,000',text)
-            for unavailable in (1,2,3): self.assertNotIn(f'Unit DEMO-{level}0{unavailable}',text)
+            for level in levels:
+                for unavailable in (1,2,3): self.assertNotIn(f'Unit DEMO-{level}0{unavailable}',text)
             self.assertEqual(sum(s.shape_type == 13 for s in slide.shapes),1)
 
     def test_html_and_ppt_share_labels_and_escape_unit(self):
