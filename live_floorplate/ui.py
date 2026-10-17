@@ -8,7 +8,7 @@ import streamlit.components.v1 as components
 from .api import sync
 from .layout import parse_layout, level_title, matched
 from .model import FloorplateError
-from .render import Style, reference_style, html_view, powerpoint
+from .render import Style, reference_style, html_view, powerpoint, FLOOR_GROUPS
 from .sample import demonstration
 
 KEY = 'live_floorplate_snapshot'
@@ -44,9 +44,9 @@ def show_snapshot(layout, pdf, style):
         st.warning('Snapshot expired. Prices and PowerPoint export are hidden. Synchronize again.')
         return
     try:
-        level = st.selectbox('Floor',range(9),format_func=level_title,key='live_floorplate_level')
-        pairs = matched(data,layout,level)
-        html = html_view(data,layout,pdf,level,style)
+        levels = st.selectbox('Floor group', FLOOR_GROUPS, format_func=lambda group: level_title(group[0]) if len(group) == 1 else f'Levels {group[0]}–{group[-1]}', key='live_floorplate_level')
+        pairs = [item for level in levels for item in matched(data,layout,level)]
+        html = html_view(data,layout,pdf,levels,style)
         # Hide the iframe at expiry even while the surrounding app is idle.
         remaining = int((data.synced_at+timedelta(seconds=300)-datetime.now(timezone.utc)).total_seconds()*1000)
         html = html.replace('</body>',f'<script>setTimeout(()=>{{document.body.textContent="Snapshot expired. Synchronize again."}},Math.max(0,{remaining}));</script></body>')
@@ -54,8 +54,8 @@ def show_snapshot(layout, pdf, style):
             st.iframe(html,height=720)
         else:
             components.html(html,height=720,scrolling=True)
-        st.caption(f'{len(pairs)} Available apartments on this floor. Areas shown as Internal + External.')
-        st.download_button('Download as-of PowerPoint — Ground through Level 8',
+        st.caption(f'{len(pairs)} Available apartments in this floor group. Areas shown as Internal + External.')
+        st.download_button('Download as-of PowerPoint — 5 grouped slides',
                            powerpoint(data,layout,pdf,style),file_name='Hurstville_Rise_Floorplates.pptx',
                            mime='application/vnd.openxmlformats-officedocument.presentationml.presentation',
                            key='live_floorplate_download')
