@@ -68,7 +68,7 @@ class Apartment:
     def configuration(self):
         beds=self.bedrooms+' Bed' if re.fullmatch(r'\d+',self.bedrooms) else self.bedrooms
         baths=self.bathrooms if 'bath' in self.bathrooms.lower() else self.bathrooms+' Bath'
-        return f'{beds} / {baths}' if self.bathrooms else beds
+        return f'{beds} + {baths}' if self.bathrooms else beds
 
 
 @dataclass(frozen=True)
