@@ -1,0 +1,10 @@
+[server]
+headless = true
+# Community Cloud manages its bind address. The local launcher explicitly uses
+# 127.0.0.1; do not force loopback here, which prevents Cloud health checks.
+enableCORS = true
+enableXsrfProtection = true
+maxUploadSize = 200
+
+[browser]
+gatherUsageStats = false

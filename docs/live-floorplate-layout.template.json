@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "project": "Hurstville Rise",
+  "verified": false,
+  "pages": {
+    "0": 1,
+    "1": 2,
+    "2": 3,
+    "3": 3,
+    "4": 3,
+    "5": 4,
+    "6": 4,
+    "7": 4,
+    "8": 5
+  },
+  "positions": [],
+  "source_sha256": "VERIFY_ORIGINAL_PDF_SHA256",
+  "review": {
+    "owner_publication_approval": false
+  }
+}

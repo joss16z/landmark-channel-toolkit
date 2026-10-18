@@ -817,7 +817,7 @@ def show_metrics(report: pd.DataFrame, price_df: pd.DataFrame, fp_df: pd.DataFra
 st.sidebar.title("功能")
 page = st.sidebar.radio(
     "选择功能",
-    ["📋 Floorplate Update Report", "✅ PPT价格更新", "🏗️ Floorplate Generator", "📊 Price Compare", "📦 Agent Package Generator"],
+    ["📋 Floorplate Update Report", "✅ PPT价格更新", "🏢 Live Floorplate", "🏗️ Floorplate Generator", "📊 Price Compare", "📦 Agent Package Generator"],
 )
 
 st.title("🏢 Landmark Channel Toolkit")
@@ -933,6 +933,10 @@ elif page == "✅ PPT价格更新":
         except Exception as e:
             st.error("更新 PPT 失败。")
             st.exception(e)
+
+elif page == "🏢 Live Floorplate":
+    from live_floorplate.ui import render_page
+    render_page()
 
 else:
     st.header(page)
