@@ -181,3 +181,15 @@ unsupported endpoint rejection, HTTP 403 and independent UI invocation without
 snapshot creation or price-sync enablement. HTTP 200 is not an authentication or
 visibility guarantee. Full suite: **55 passed** using
 `.venv/bin/python -m unittest discover -s tests -q`. No live calls were performed.
+
+### Required-only versus PDF page 4 empty-filter comparison
+
+Added **Compare Project List Requests** with two status-only official GET probes:
+A sends only agencyid/sign; B preserves all twelve empty optional parameters in
+PDF page 4 order. Tests verify exact query pairs with blank values preserved,
+single encoding, unchanged normal-builder behavior, conflicting/missing Secrets,
+independent transport failures, redaction and explicit Streamlit invocation
+without inventory synchronization. Full suite:
+`.venv/bin/python -m unittest discover -s tests -q` — **61 passed**.
+No real credentials or live endpoint calls were used. The Streamlit UI was
+verified through AppTest; hosted test deployment availability is not verified.

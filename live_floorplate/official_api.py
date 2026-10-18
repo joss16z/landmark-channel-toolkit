@@ -10,6 +10,20 @@ OPTIONAL_LIST_PARAMS={'searchkey','category','minprice','maxprice','israngesearc
                       'bedroomqty','bathroomqty','studymediaqty','carspaceqty',
                       'pagenum','pagesize','sortby'}
 
+# Page 4 example order; separate from normal omission of empty optional values.
+LIST_EXAMPLE_ORDER=('searchkey','category','minprice','maxprice','israngesearch',
+                    'bedroomqty','bathroomqty','studymediaqty','carspaceqty',
+                    'pagenum','pagesize','sortby')
+
+
+def project_list_comparison_parameters(config):
+    """Build the required-only and exact empty-filter example variants."""
+    url, query = request_parameters(config,'getProjectList')
+    if set(query) != {'agencyid','sign'}:
+        raise FloorplateError('Comparison requires only agency and key configuration')
+    required = {key:query[key] for key in ('agencyid','sign')}
+    return url, required, {**required, **dict.fromkeys(LIST_EXAMPLE_ORDER,'')}
+
 
 def request_parameters(config,endpoint='getProject'):
     if endpoint not in ('getProject','getProjectList'):

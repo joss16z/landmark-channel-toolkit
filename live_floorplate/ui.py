@@ -8,7 +8,7 @@ import fitz
 import streamlit as st
 import streamlit.components.v1 as components
 from .api import sync
-from .connection_test import connection_report
+from .connection_test import connection_report, compare_project_list_requests
 from .layout import parse_layout, matched
 from .source_mapping import GROUPS
 from .model import FloorplateError
@@ -80,6 +80,17 @@ def render_connection_test():
     with st.expander('Arcanite connection diagnostics'):
         st.caption('Optional read-only server request. Does not synchronize prices or certify authentication, visibility or completeness. Use only in an approved, access-restricted deployment.')
         st.caption('Compare the project list and project detail independently. The guide limits the list to projects marked Show on Website; HTTP 200 alone does not prove API authentication or project visibility.')
+        if st.button('Compare Project List Requests',key='compare_project_list_requests'):
+            try:
+                comparison = compare_project_list_requests(st.secrets['arcanite'])
+            except Exception:
+                comparison = {'A':None,'B':None}
+            for variant,description in (('A','Required parameters only'),
+                                        ('B','Official page 4 example: all optional parameters empty')):
+                status = comparison[variant]
+                st.write(f'Test {variant} — {description} — HTTP status: '
+                         + (str(status) if status is not None else 'unavailable'))
+            st.warning('Two read-only requests. Status comparison only; no raw responses shown. HTTP 200 does not prove authentication or completeness. Live price synchronization remains disabled in preview mode.')
         for label,button_key,endpoint in (
                 ('Test Arcanite Connection','test_arcanite_connection','getProject'),
                 ('Test Project List Access','test_arcanite_project_list','getProjectList')):

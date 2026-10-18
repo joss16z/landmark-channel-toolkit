@@ -256,3 +256,35 @@ Use only the owner's current raw API key from private server Secrets. This
 additional diagnostic uses no browser cookies, invented parameters or alternate
 hosts, and does not change live price-sync gates. No live calls were made while
 implementing or testing it.
+
+### Compare required-only and official empty-filter requests
+
+Click **Compare Project List Requests** in **Arcanite connection diagnostics**
+on the approved internal test app. Each click makes exactly two sequential,
+read-only GET requests to the fixed official getProjectList endpoint using the
+same server-side Secrets:
+
+- **Test A**: `agencyid` and `sign` only.
+- **Test B**: the same required parameters followed, in the PDF page 4 example
+  order, by `searchkey`, `category`, `minprice`, `maxprice`, `israngesearch`,
+  `bedroomqty`, `bathroomqty`, `studymediaqty`, `carspaceqty`, `pagenum`,
+  `pagesize`, `sortby`, each explicitly encoded as `name=` (empty string).
+
+The comparison ignores configured filters/project IDs and does not paginate.
+The standard request builder continues to omit empty optional parameters; a
+separate official example builder preserves them only for this explicit test.
+Direct and nested Secrets remain supported. Invalid or conflicting required
+Secrets prevent both requests. A transport failure for A does not skip B.
+Results contain only the HTTP status for each variant, or `unavailable` if no
+status was obtained. No raw responses, signed URLs, credentials, prices, units
+or error-body details are displayed or saved. There are no automatic retries,
+redirects or live-price-sync enablement. HTTP 200 is not proof of authentication
+or a complete inventory; matching 403 results do not establish the root cause.
+
+After the feature-branch push, the separate Streamlit test deployment must load
+that commit before the button appears. Refresh the Live Floorplate page after
+the app finishes updating. If it is absent, verify the **test app** repository,
+branch `feature/live-floorplate` and entrypoint `app.py`; inspect its deployment
+status or reboot that test app if necessary. Do not change the production app
+or switch/merge main. Repository push and local AppTest success are not proof
+that a hosted deployment is updated; its URL/status must be verified separately.
